@@ -6,13 +6,24 @@ dotenv.config();
 
 const INSTANCE_ID = process.env.ULTRAMSG_INSTANCE_ID;
 const TOKEN = process.env.ULTRAMSG_TOKEN;
+
+// Validar configuración
+if (!INSTANCE_ID || !TOKEN) {
+  console.error('❌ ULTRAMSG_INSTANCE_ID o ULTRAMSG_TOKEN no configurados');
+}
+
 const BASE_URL = `https://api.ultramsg.com/${INSTANCE_ID}`;
 
 // Función para enviar mensaje de WhatsApp
 export async function sendWhatsAppMessage(to, message, options = {}) {
   try {
+    // Validar parámetros
+    if (!to || !message) {
+      throw new Error('Parámetros "to" y "message" son requeridos');
+    }
+    
     // Limpiar número (quitar caracteres especiales)
-    const cleanNumber = to.replace(/[^0-9]/g, '');
+    const cleanNumber = String(to).replace(/[^0-9]/g, '');
     
     // Asegurar formato correcto (agregar código de país si falta)
     const formattedNumber = cleanNumber.startsWith('549') 

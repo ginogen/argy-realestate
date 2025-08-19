@@ -35,6 +35,7 @@ app.post('/webhook', async (req, res) => {
     console.log('📨 Webhook recibido:', JSON.stringify(req.body, null, 2));
     
     // Extraer datos del mensaje
+    const data = req.body.data || req.body;
     const { 
       from, 
       body: messageBody, 
@@ -43,7 +44,7 @@ app.post('/webhook', async (req, res) => {
       author,
       chatName,
       type
-    } = req.body;
+    } = data;
     
     // Ignorar mensajes propios
     if (fromMe) {
