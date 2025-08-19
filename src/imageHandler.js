@@ -17,9 +17,9 @@ export async function sendPropertyImage(userPhone, property) {
       return { success: false, message: 'Propiedad sin fotos' };
     }
     
-    // Decidir cuántas imágenes enviar
-    const maxImages = Math.min(5, property.photos.length);
-    console.log(`📸 Enviando ${maxImages} imagen(es) de ${property.photos.length} disponibles`);
+    // Enviar todas las fotos disponibles
+    const maxImages = property.photos.length;
+    console.log(`📸 Enviando todas las ${maxImages} imagen(es) disponibles`);
     
     // Si solo hay 1 imagen, usar lógica simple
     if (property.photos.length === 1) {
@@ -53,14 +53,15 @@ async function sendSinglePropertyImage(userPhone, property) {
   return { success: true, result };
 }
 
-// Enviar galería de imágenes (hasta 5)
-export async function sendPropertyGallery(userPhone, property, maxImages = 5) {
+// Enviar galería de imágenes (todas las disponibles)
+export async function sendPropertyGallery(userPhone, property, maxImages = null) {
   try {
     if (!property.photos || property.photos.length === 0) {
       return { success: false, message: 'Propiedad sin fotos' };
     }
     
-    const imagesToSend = property.photos.slice(0, maxImages);
+    // Enviar todas las fotos disponibles
+    const imagesToSend = maxImages ? property.photos.slice(0, maxImages) : property.photos;
     const results = [];
     
     for (let i = 0; i < imagesToSend.length; i++) {

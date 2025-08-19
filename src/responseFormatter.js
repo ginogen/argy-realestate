@@ -108,16 +108,8 @@ export function formatPropertyDetails(property) {
   
   // Fotos
   if (property.photosCount > 0) {
-    const imagesToSend = Math.min(5, property.photosCount);
     message += `\n📸 ${property.photosCount} foto${property.photosCount > 1 ? 's' : ''} disponible${property.photosCount > 1 ? 's' : ''}\n`;
-    
-    if (property.photosCount === 1) {
-      message += `💡 Se enviará la foto automáticamente\n`;
-    } else if (property.photosCount <= 5) {
-      message += `💡 Se enviarán todas las fotos automáticamente\n`;
-    } else {
-      message += `💡 Se enviarán las primeras 5 fotos automáticamente\n`;
-    }
+    message += `💡 Se enviar${property.photosCount > 1 ? 'án todas las fotos' : 'á la foto'} automáticamente\n`;
   }
   
   // Score de relevancia (solo en desarrollo)
