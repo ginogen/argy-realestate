@@ -108,8 +108,8 @@ function detectMessageType(message, session) {
     return 'photo_request';
   }
   
-  // Número de propiedad (1-10) - PRIORIDAD ALTA si hay resultados previos
-  if (/^[1-9]$|^10$/.test(lowerMessage)) {
+  // Número de propiedad (1-20) - PRIORIDAD ALTA si hay resultados previos
+  if (/^([1-9]|1[0-9]|20)$/.test(lowerMessage)) {
     // Verificar si hay resultados previos en la sesión
     if (session && session.lastResults && session.lastResults.length > 0) {
       console.log(`✅ Detectado número con resultados previos - es selección de propiedad`);
@@ -161,7 +161,7 @@ function handleHelp() {
 • "Departamentos baratos"
 
 📊 *Después de una búsqueda:*
-• Escribe el número (1-10) para ver detalles
+• Escribe el número (1-20) para ver detalles
 • Escribe "más" para ver más resultados
 • Haz una nueva búsqueda para refinar
 
@@ -184,7 +184,7 @@ async function handlePropertyDetail(message, session) {
       
 🔍 Para ver detalles de una propiedad:
 • Primero busca propiedades 
-• Luego escribe el número (1-${Math.min(10, properties.length)})`,
+• Luego escribe el número (1-${Math.min(20, properties.length)})`,
       context: session.context
     };
   }

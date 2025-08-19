@@ -365,7 +365,7 @@ export function formatSearchSummary(filters, count) {
 // Formatear opciones de acción
 export function formatActionOptions() {
   return '\n📱 *Opciones:*\n' +
-         '• Escribe el número (1-10) para ver detalles\n' +
+         '• Escribe el número (1-20) para ver detalles\n' +
          '• Escribe "foto [número]" para ver imagen\n' +
          '• Escribe "más" para ver más resultados\n' +
          '• Haz una nueva búsqueda para refinar';
