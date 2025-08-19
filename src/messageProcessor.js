@@ -243,13 +243,13 @@ async function handleMoreResults(session) {
   }
   
   // Incrementar offset para siguiente página
-  const offset = (session.currentOffset || 0) + 10;
+  const offset = (session.currentOffset || 0) + 20;
   
   try {
     const results = await searchProperties(
       session.lastQuery, 
       session.lastFilters,
-      { offset, limit: 10 }
+      { offset, limit: 20 }
     );
     
     if (results.properties.length === 0) {
@@ -260,7 +260,7 @@ async function handleMoreResults(session) {
     }
     
     return {
-      text: formatPropertyList(results.properties, `📄 Más resultados (${offset + 1}-${offset + results.properties.length}):`),
+      text: formatPropertyList(results.properties, `📄 Más resultados (${offset + 1}-${offset + results.properties.length}):`, results.total, results.hasMore),
       properties: results.properties,
       context: {
         ...session.context,
@@ -288,7 +288,7 @@ async function handlePropertySearch(message, session) {
     const results = await searchProperties(
       searchIntent.query,
       searchIntent.filters,
-      { offset: 0, limit: 10 }
+      { offset: 0, limit: 20 }
     );
     
     if (results.properties.length === 0) {
@@ -311,7 +311,7 @@ async function handlePropertySearch(message, session) {
     
     // Crear mensaje de resumen
     const summary = createSearchSummary(searchIntent, results);
-    const formattedList = formatPropertyList(results.properties);
+    const formattedList = formatPropertyList(results.properties, '🏠 *Propiedades encontradas:*', results.total, results.hasMore);
     
     // Actualizar la sesión con los resultados
     session.lastResults = results.properties;

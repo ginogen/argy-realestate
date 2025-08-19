@@ -20,7 +20,7 @@ const openai = new OpenAI({
 // Función principal de búsqueda
 export async function searchProperties(query, filters = {}, options = {}) {
   try {
-    const { offset = 0, limit = 10 } = options;
+    const { offset = 0, limit = 20 } = options;
     
     console.log('🔍 Búsqueda:', { query, filters, offset, limit });
     
@@ -31,13 +31,13 @@ export async function searchProperties(query, filters = {}, options = {}) {
     const qdrantFilter = buildQdrantFilter(filters);
     
     // Realizar búsqueda en Qdrant - obtener más resultados para filtrar después
-    const searchLimit = Math.max(50, (limit + offset) * 3);
+    const searchLimit = Math.max(100, (limit + offset) * 4);
     const searchResults = await qdrant.search(COLLECTION_NAME, {
       vector: queryEmbedding,
       filter: qdrantFilter,
       limit: searchLimit,
       with_payload: true,
-      score_threshold: 0.1 // Umbral mínimo de similitud
+      score_threshold: 0.05 // Umbral mínimo de similitud (más permisivo)
     });
     
     // Aplicar filtros post-búsqueda manualmente
@@ -112,9 +112,14 @@ function applyPostSearchFilters(searchResults, filters) {
       return false;
     }
     
-    // Filtro por dormitorios (exacto)
-    if (filters.bedrooms && property.bedrooms !== filters.bedrooms) {
-      return false;
+    // Filtro por dormitorios (flexible: ±1 dormitorio)
+    if (filters.bedrooms) {
+      const requestedBedrooms = filters.bedrooms;
+      const propertyBedrooms = property.bedrooms || 0;
+      // Aceptar propiedades con ±1 dormitorio del solicitado
+      if (propertyBedrooms < requestedBedrooms - 1 || propertyBedrooms > requestedBedrooms + 1) {
+        return false;
+      }
     }
     
     // Filtro por baños (mínimo)
@@ -134,14 +139,24 @@ function applyPostSearchFilters(searchResults, filters) {
       }
     }
     
-    // Filtro por barrio
+    // Filtro por barrio (más flexible)
     if (filters.neighborhood) {
       const neighborhoodLower = property.neighborhood?.toLowerCase() || '';
       const addressLower = property.address?.toLowerCase() || '';
+      const cityLower = property.city?.toLowerCase() || '';
       const filterNeighborhood = filters.neighborhood.toLowerCase();
       
-      if (!neighborhoodLower.includes(filterNeighborhood) && 
-          !addressLower.includes(filterNeighborhood)) {
+      // Buscar coincidencias parciales en barrio, dirección o ciudad
+      const hasMatch = neighborhoodLower.includes(filterNeighborhood) || 
+                      addressLower.includes(filterNeighborhood) ||
+                      cityLower.includes(filterNeighborhood) ||
+                      filterNeighborhood.includes(neighborhoodLower) ||
+                      // Coincidencias por palabras clave comunes
+                      (filterNeighborhood.includes('centro') && (neighborhoodLower.includes('centro') || neighborhoodLower.includes('distrito centro'))) ||
+                      (filterNeighborhood.includes('norte') && neighborhoodLower.includes('norte')) ||
+                      (filterNeighborhood.includes('sur') && neighborhoodLower.includes('sur'));
+      
+      if (!hasMatch) {
         return false;
       }
     }
@@ -173,42 +188,26 @@ function applyPostSearchFilters(searchResults, filters) {
   });
 }
 
-// Eliminar propiedades duplicadas
+// Eliminar propiedades duplicadas (menos agresivo)
 function removeDuplicateProperties(results) {
-  const seen = new Map();
+  const seen = new Set();
   const unique = [];
   
   for (const result of results) {
     const property = result.payload;
     
-    // Crear clave única basada en originalId, título y dirección
-    const key1 = property.originalId || '';
-    const key2 = `${property.title}_${property.address}_${property.price}`;
-    const key3 = `${property.propertyType}_${property.bedrooms}_${property.totalArea}_${property.neighborhood}`;
+    // Usar solo originalId como clave principal para duplicados
+    const originalId = property.originalId;
     
-    // Si el originalId existe y ya lo vimos, es duplicado
-    if (key1 && seen.has(key1)) {
+    // Solo eliminar si el originalId ya fue visto
+    if (originalId && seen.has(originalId)) {
       continue;
     }
     
-    // Si la combinación título+dirección+precio ya existe, es probable duplicado
-    if (seen.has(key2)) {
-      continue;
+    // Marcar como visto solo por originalId
+    if (originalId) {
+      seen.add(originalId);
     }
-    
-    // Si la combinación tipo+dormitorios+área+barrio es muy similar, verificar
-    if (seen.has(key3)) {
-      const existing = seen.get(key3);
-      // Si el precio es el mismo, es muy probable que sea duplicado
-      if (existing.price === property.price) {
-        continue;
-      }
-    }
-    
-    // Marcar como visto
-    if (key1) seen.set(key1, property);
-    seen.set(key2, property);
-    seen.set(key3, property);
     
     unique.push(result);
   }
@@ -221,9 +220,13 @@ function removeDuplicateProperties(results) {
 function calculateRelevanceScore(property, filters, vectorScore) {
   let score = vectorScore * 100; // Base score del embedding
   
-  // Boost por coincidencias exactas
-  if (filters.bedrooms && property.bedrooms === filters.bedrooms) {
-    score += 20;
+  // Boost por coincidencias exactas de dormitorios
+  if (filters.bedrooms) {
+    if (property.bedrooms === filters.bedrooms) {
+      score += 30; // Boost alto por coincidencia exacta
+    } else if (Math.abs(property.bedrooms - filters.bedrooms) === 1) {
+      score += 15; // Boost medio por ±1 dormitorio
+    }
   }
   
   if (filters.propertyType && property.propertyType === filters.propertyType) {

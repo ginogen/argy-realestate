@@ -14,7 +14,7 @@ const PROPERTY_FILES = [
 ];
 
 const COLLECTION_NAME = 'properties';
-const BATCH_SIZE = 10;
+const BATCH_SIZE = 50;
 const EMBEDDING_MODEL = 'text-embedding-3-small';
 
 // Usar configuración de producción
@@ -152,13 +152,24 @@ function extractPropertyPayload(property, sourceFile) {
       publisherId: cleanString(property.publisher?.publisherId) || '',
       
       url: property.url ? `https://www.zonaprop.com.ar${cleanString(property.url)}` : '',
-      photos: Array.isArray(property.postingMultimedias) 
-        ? property.postingMultimedias
-            .map(m => cleanString(m.url))
+      photos: Array.isArray(property.visiblePictures?.pictures) 
+        ? property.visiblePictures.pictures
+            .filter(m => m.multimediaTypeId === "2") // Solo imágenes
+            .map(m => cleanString(m.url730x532) || cleanString(m.url360x266))
             .filter(url => url.length > 0)
             .slice(0, 20)
-        : [],
-      photosCount: Array.isArray(property.postingMultimedias) ? property.postingMultimedias.length : 0,
+        : Array.isArray(property.multimediaArray) 
+          ? property.multimediaArray
+              .filter(m => m.multimediaTypeId === "2")
+              .map(m => cleanString(m.url730x532) || cleanString(m.url360x266))
+              .filter(url => url.length > 0)
+              .slice(0, 20)
+          : [],
+      photosCount: Array.isArray(property.visiblePictures?.pictures) 
+        ? property.visiblePictures.pictures.filter(m => m.multimediaTypeId === "2").length 
+        : Array.isArray(property.multimediaArray) 
+          ? property.multimediaArray.filter(m => m.multimediaTypeId === "2").length
+          : 0,
       
       embeddingText: '',
       createdAt: cleanString(property.created_date) || new Date().toISOString(),

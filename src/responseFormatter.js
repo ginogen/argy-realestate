@@ -2,12 +2,19 @@
 import { sendWhatsAppLocation } from './ultramsgClient.js';
 
 // Formatear lista de propiedades
-export function formatPropertyList(properties, title = '🏠 *Propiedades encontradas:*') {
+export function formatPropertyList(properties, title = '🏠 *Propiedades encontradas:*', totalAvailable = null, hasMore = false) {
   if (!properties || properties.length === 0) {
     return '❌ No se encontraron propiedades que coincidan con tu búsqueda.';
   }
   
-  let message = title + '\n\n';
+  let message = title;
+  
+  // Agregar información de resultados disponibles
+  if (totalAvailable && totalAvailable > properties.length) {
+    message += ` (mostrando ${properties.length} de ${totalAvailable})`;
+  }
+  
+  message += '\n\n';
   
   properties.forEach((property, index) => {
     const number = index + 1;
@@ -26,6 +33,12 @@ export function formatPropertyList(properties, title = '🏠 *Propiedades encont
     
     message += `\n`;
   });
+  
+  // Agregar sugerencia si hay más resultados
+  if (hasMore) {
+    message += '\n📄 *Hay más propiedades disponibles*\n';
+    message += '💡 Escribe *"más"* para ver más resultados\n';
+  }
   
   return message.trim();
 }
@@ -79,13 +92,16 @@ export function formatPropertyDetails(property) {
     message += `\n🏢 *Inmobiliaria:*\n`;
     message += `   ${property.publisher}\n`;
     if (property.publisherPhone) {
-      message += `   📞 ${property.publisherPhone}\n`;
+      // Formatear teléfono como enlace de WhatsApp
+      const phoneNumber = property.publisherPhone.replace(/\D/g, ''); // Remover no-dígitos
+      const whatsappNumber = phoneNumber.startsWith('54') ? phoneNumber : `549${phoneNumber}`;
+      message += `   📱 https://wa.me/${whatsappNumber}\n`;
     }
   }
   
   // URL de la propiedad
   if (property.url) {
-    message += `\n🔗 *Ver en Zonaprop:*\n${property.url}\n`;
+    message += `\n🔗 *Ver:* ${property.url}\n`;
   }
   
   // Fotos

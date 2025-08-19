@@ -35,7 +35,7 @@ export async function sendPropertyImage(userPhone, property) {
                    `💰 ${price}\n` +
                    `🏠 ${property.totalArea ? property.totalArea + 'm²' : ''} | ` +
                    `🛏️ ${property.bedrooms || 0} | 🚿 ${property.bathrooms || 0}\n` +
-                   `🔗 ${property.url || 'Ver en Zonaprop'}`;
+                   `🔗 ${property.url || 'Ver propiedad'}`;
     
     console.log(`📤 Enviando imagen: ${imageUrl.substring(0, 100)}...`);
     console.log(`📝 Caption: ${caption.substring(0, 100)}...`);
