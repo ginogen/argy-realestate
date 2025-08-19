@@ -351,7 +351,7 @@ async function handlePropertySearch(message, session) {
     
     // Guardar búsqueda en historial persistente
     if (session.user?.whatsapp_number) {
-      saveUserSearchHistory(
+      await saveUserSearchHistory(
         session.user.whatsapp_number, 
         searchIntent.query, 
         searchIntent.filters, 
@@ -359,7 +359,7 @@ async function handlePropertySearch(message, session) {
       );
       
       // Aprender de los filtros de búsqueda
-      learnFromUserBehavior(session.user.whatsapp_number, searchIntent.filters);
+      await learnFromUserBehavior(session.user.whatsapp_number, searchIntent.filters);
     }
     
     return {
@@ -515,7 +515,7 @@ async function handleFavorites(session) {
   }
 
   const { getUserFavoritesData } = await import('./userManager.js');
-  const favorites = getUserFavoritesData(session.user.whatsapp_number);
+  const favorites = await getUserFavoritesData(session.user.whatsapp_number);
 
   if (!favorites || favorites.length === 0) {
     return {
@@ -553,7 +553,7 @@ async function handleSearchHistory(session) {
   }
 
   const { getUserSearchHistory } = await import('./userManager.js');
-  const history = getUserSearchHistory(session.user.whatsapp_number, 10);
+  const history = await getUserSearchHistory(session.user.whatsapp_number, 10);
 
   if (!history || history.length === 0) {
     return {
@@ -604,7 +604,7 @@ async function handlePreferences(session) {
   }
 
   const { getUserPreferencesData } = await import('./userManager.js');
-  const preferences = getUserPreferencesData(session.user.whatsapp_number);
+  const preferences = await getUserPreferencesData(session.user.whatsapp_number);
 
   let message = `⚙️ *Tus preferencias guardadas:*\n\n`;
 
@@ -687,7 +687,7 @@ async function handleSaveProperty(message, session) {
 
   // Guardar como favorito
   const { saveUserFavorite } = await import('./userManager.js');
-  const saved = saveUserFavorite(
+  const saved = await saveUserFavorite(
     session.user.whatsapp_number,
     property.originalId,
     property.title,

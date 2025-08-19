@@ -1,4 +1,4 @@
-// userManager.js - Gestor de usuarios que combina SQLite persistente con sesiones en memoria
+// userManager.js - Gestor de usuarios que combina PostgreSQL persistente con sesiones en memoria
 import { 
   initializeDatabase, 
   getOrCreateUser, 
@@ -11,7 +11,7 @@ import {
   savePropertyAsFavorite,
   getUserFavorites,
   removeFavorite
-} from './database.js';
+} from './databasePostgres.js';
 
 // Sesiones en memoria para datos temporales (más rápido)
 const sessions = new Map();
@@ -49,7 +49,7 @@ export async function getOrCreateUserSession(whatsappNumber, firstName = null) {
   
   try {
     // 1. Obtener/crear usuario en BD persistente
-    const user = getOrCreateUser(cleanNumber, firstName);
+    const user = await getOrCreateUser(cleanNumber, firstName);
     if (!user) {
       throw new Error('Error creando usuario en BD');
     }
@@ -113,67 +113,67 @@ export function updateSession(whatsappNumber, updates) {
 // === FUNCIONES DE PREFERENCIAS ===
 
 // Obtener preferencias del usuario (desde BD)
-export function getUserPreferencesData(whatsappNumber) {
+export async function getUserPreferencesData(whatsappNumber) {
   const session = sessions.get(whatsappNumber.replace(/[^0-9]/g, ''));
   if (!session?.user) return null;
   
-  return getUserPreferences(session.user.id);
+  return await getUserPreferences(session.user.id);
 }
 
 // Guardar preferencias del usuario (en BD)
-export function saveUserPreferencesData(whatsappNumber, preferences) {
+export async function saveUserPreferencesData(whatsappNumber, preferences) {
   const session = sessions.get(whatsappNumber.replace(/[^0-9]/g, ''));
   if (!session?.user) return false;
   
-  return saveUserPreferences(session.user.id, preferences);
+  return await saveUserPreferences(session.user.id, preferences);
 }
 
 // === FUNCIONES DE HISTORIAL DE BÚSQUEDAS ===
 
 // Guardar búsqueda en historial (en BD)
-export function saveUserSearchHistory(whatsappNumber, query, filters, resultsCount = 0) {
+export async function saveUserSearchHistory(whatsappNumber, query, filters, resultsCount = 0) {
   const session = sessions.get(whatsappNumber.replace(/[^0-9]/g, ''));
   if (!session?.user) return false;
   
   // Incrementar contador de búsquedas
-  incrementUserSearches(session.user.id);
+  await incrementUserSearches(session.user.id);
   
   // Guardar en historial
-  return saveSearchHistory(session.user.id, query, filters, resultsCount);
+  return await saveSearchHistory(session.user.id, query, filters, resultsCount);
 }
 
 // Obtener historial de búsquedas (desde BD)
-export function getUserSearchHistory(whatsappNumber, limit = 10) {
+export async function getUserSearchHistory(whatsappNumber, limit = 10) {
   const session = sessions.get(whatsappNumber.replace(/[^0-9]/g, ''));
   if (!session?.user) return [];
   
-  return getSearchHistory(session.user.id, limit);
+  return await getSearchHistory(session.user.id, limit);
 }
 
 // === FUNCIONES DE FAVORITOS ===
 
 // Guardar propiedad como favorita
-export function saveUserFavorite(whatsappNumber, propertyId, title = null, price = null) {
+export async function saveUserFavorite(whatsappNumber, propertyId, title = null, price = null) {
   const session = sessions.get(whatsappNumber.replace(/[^0-9]/g, ''));
   if (!session?.user) return false;
   
-  return savePropertyAsFavorite(session.user.id, propertyId, title, price);
+  return await savePropertyAsFavorite(session.user.id, propertyId, title, price);
 }
 
 // Obtener favoritos del usuario
-export function getUserFavoritesData(whatsappNumber) {
+export async function getUserFavoritesData(whatsappNumber) {
   const session = sessions.get(whatsappNumber.replace(/[^0-9]/g, ''));
   if (!session?.user) return [];
   
-  return getUserFavorites(session.user.id);
+  return await getUserFavorites(session.user.id);
 }
 
 // Eliminar favorito
-export function removeUserFavorite(whatsappNumber, propertyId) {
+export async function removeUserFavorite(whatsappNumber, propertyId) {
   const session = sessions.get(whatsappNumber.replace(/[^0-9]/g, ''));
   if (!session?.user) return false;
   
-  return removeFavorite(session.user.id, propertyId);
+  return await removeFavorite(session.user.id, propertyId);
 }
 
 // === FUNCIONES DE COMPATIBILIDAD (manteniendo las originales) ===
@@ -190,7 +190,7 @@ export async function getSession(whatsappNumber) {
   
   // Agregar propiedades esperadas por el código anterior
   session.context = session.context || {};
-  session.preferences = getUserPreferences(session.user.id) || {
+  session.preferences = await getUserPreferences(session.user.id) || {
     maxPrice: null,
     preferredNeighborhoods: [],
     preferredPropertyTypes: [],
@@ -249,14 +249,14 @@ export function addToConversationHistory(whatsappNumber, type, content) {
 }
 
 // Obtener contexto para IA
-export function getContextForAI(whatsappNumber) {
+export async function getContextForAI(whatsappNumber) {
   const cleanNumber = whatsappNumber.replace(/[^0-9]/g, '');
   const session = sessions.get(cleanNumber);
   
   if (!session) return {};
   
   // Combinar datos de sesión temporal + preferencias persistentes
-  const preferences = getUserPreferences(session.user?.id) || {};
+  const preferences = await getUserPreferences(session.user?.id) || {};
   
   return {
     lastQuery: session.lastQuery,
@@ -270,12 +270,12 @@ export function getContextForAI(whatsappNumber) {
 }
 
 // Aprender de comportamiento (guardar preferencias automáticamente)
-export function learnFromUserBehavior(whatsappNumber, searchFilters, selectedProperties = []) {
+export async function learnFromUserBehavior(whatsappNumber, searchFilters, selectedProperties = []) {
   const session = sessions.get(whatsappNumber.replace(/[^0-9]/g, ''));
   if (!session?.user) return;
   
   // Obtener preferencias actuales
-  let preferences = getUserPreferences(session.user.id) || {};
+  let preferences = await getUserPreferences(session.user.id) || {};
   let hasChanges = false;
   
   // Aprender precio preferido
@@ -318,7 +318,7 @@ export function learnFromUserBehavior(whatsappNumber, searchFilters, selectedPro
   
   // Guardar cambios si hubo alguno
   if (hasChanges) {
-    saveUserPreferences(session.user.id, preferences);
+    await saveUserPreferences(session.user.id, preferences);
     console.log(`🧠 Preferencias actualizadas para usuario: ${whatsappNumber.replace(/[^0-9]/g, '')}`);
   }
 }

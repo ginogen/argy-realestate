@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "build": "chmod +x scripts/prebuild.sh && ./scripts/prebuild.sh",
+    "build": "mkdir -p data && echo 'Build completed'",
     "load-data": "node scripts/loadToQdrant.js",
     "load-multiple": "node scripts/loadMultipleFiles.js",
     "load-fixed": "node scripts/fixedLoader.js",
@@ -27,13 +27,12 @@
   "dependencies": {
     "@qdrant/js-client-rest": "^1.15.1",
     "axios": "^1.6.2",
-    "better-sqlite3": "^9.6.0",
     "body-parser": "^1.20.2",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^4.18.2",
     "openai": "^4.104.0",
-    "prebuild-install": "^7.1.1"
+    "pg": "^8.11.3"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
