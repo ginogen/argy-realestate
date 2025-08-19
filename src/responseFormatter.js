@@ -35,11 +35,18 @@ export function formatPropertyList(properties, title = '🏠 *Propiedades encont
     message += `\n`;
   });
   
-  // Agregar sugerencia si hay más resultados
+  // Agregar navegación y opciones
+  message += '\n📱 **OPCIONES DISPONIBLES:**\n';
+  message += `• Detalles: escribe un número (1-${Math.min(properties.length, 20)})\n`;
+  message += '• Fotos: "foto [número]" (ej: foto 3)\n';
+  message += '• Guardar: "guardar [número]" (ej: guardar 5)\n';
+  
   if (hasMore) {
-    message += '\n📄 *Hay más propiedades disponibles*\n';
-    message += '💡 Escribe *"más"* para ver más resultados\n';
+    message += '• Más resultados: escribe "más"\n';
   }
+  
+  message += '• Nueva búsqueda: escribe lo que buscas\n';
+  message += '• Menú: escribe "ayuda"\n';
   
   return message.trim();
 }
@@ -115,6 +122,13 @@ export function formatPropertyDetails(property) {
   if (process.env.NODE_ENV === 'development' && property.score) {
     message += `\n🎯 Score: ${property.score.toFixed(2)} | Relevancia: ${property.relevanceScore?.toFixed(1) || 'N/A'}\n`;
   }
+  
+  // Agregar opciones de navegación
+  message += `\n📱 **¿QUÉ QUIERES HACER?**\n`;
+  message += `• Ver fotos: escribe "foto"\n`;
+  message += `• Guardar: "guardar ${property.originalId || '1'}"\n`;
+  message += `• Volver a resultados: "más" o nueva búsqueda\n`;
+  message += `• Menú principal: "ayuda"\n`;
   
   return message;
 }

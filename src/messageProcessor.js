@@ -51,6 +51,9 @@ export async function processMessage(message, session) {
       case 'save_property':
         return await handleSaveProperty(message, session);
       
+      case 'recommended_search':
+        return await handleRecommendedSearch(session);
+      
       default:
         return await handlePropertySearch(message, session);
     }
@@ -71,57 +74,98 @@ function detectMessageType(message, session) {
   console.log(`🔍 Detectando tipo de mensaje: "${message}"`);
   console.log(`📊 Sesión tiene ${session?.lastResults?.length || 0} resultados previos`);
   
+  // Debug: mostrar qué regex está siendo evaluada
+  const debugChecks = [];
+  
   // Saludos
   if (/^(hola|hi|hello|buenos días|buenas tardes|buenas noches|hey)$/i.test(lowerMessage)) {
+    debugChecks.push('greeting: MATCH');
+    console.log(`🎯 Tipo detectado: greeting`);
     return 'greeting';
   }
+  debugChecks.push('greeting: no match');
   
-  // Ayuda
-  if (/ayuda|help|como usar|instrucciones/i.test(lowerMessage)) {
+  // Ayuda y menú
+  if (/ayuda|help|como usar|instrucciones|menu|menú/i.test(lowerMessage)) {
+    debugChecks.push('help: MATCH');
+    console.log(`🎯 Tipo detectado: help`);
     return 'help';
   }
+  debugChecks.push('help: no match');
   
   // Comandos de usuario
   if (/favoritos|guardadas|mis propiedades|saved/i.test(lowerMessage)) {
+    debugChecks.push('favorites: MATCH');
+    console.log(`🎯 Tipo detectado: favorites`);
     return 'favorites';
   }
+  debugChecks.push('favorites: no match');
   
   if (/historial|mis búsquedas|búsquedas anteriores|history/i.test(lowerMessage)) {
+    debugChecks.push('search_history: MATCH');
+    console.log(`🎯 Tipo detectado: search_history`);
     return 'search_history';
   }
+  debugChecks.push('search_history: no match');
   
   if (/preferencias|configuración|config|settings/i.test(lowerMessage)) {
+    debugChecks.push('preferences: MATCH');
+    console.log(`🎯 Tipo detectado: preferences`);
     return 'preferences';
   }
+  debugChecks.push('preferences: no match');
+  
+  // Búsqueda recomendada basada en preferencias
+  if (/recomendado|recomendación|sugerido|basado en mis gustos/i.test(lowerMessage)) {
+    debugChecks.push('recommended: MATCH');
+    console.log(`🎯 Tipo detectado: recommended_search`);
+    return 'recommended_search';
+  }
+  debugChecks.push('recommended: no match');
   
   if (/guardar|favorito|save/i.test(lowerMessage) && /[0-9]/.test(lowerMessage)) {
+    debugChecks.push('save_property: MATCH');
+    console.log(`🎯 Tipo detectado: save_property`);
     return 'save_property';
   }
+  debugChecks.push('save_property: no match');
   
   // Más resultados
   if (/^(más|mas|more|ver más|siguiente|next)$/i.test(lowerMessage)) {
+    debugChecks.push('more_results: MATCH');
+    console.log(`🎯 Tipo detectado: more_results`);
     return 'more_results';
   }
+  debugChecks.push('more_results: no match');
   
   // Solicitud de foto
-  if (/foto|imagen|picture|pic|ver foto/i.test(lowerMessage)) {
+  if (/\bfoto\b|\bimagen\b|\bpicture\b|\bpic\b|ver foto/i.test(lowerMessage)) {
+    debugChecks.push('photo_request: MATCH');
+    console.log(`🎯 Tipo detectado: photo_request`);
     return 'photo_request';
   }
+  debugChecks.push('photo_request: no match');
   
   // Número de propiedad (1-20) - PRIORIDAD ALTA si hay resultados previos
   if (/^([1-9]|1[0-9]|20)$/.test(lowerMessage)) {
+    debugChecks.push('property_number: MATCH');
     // Verificar si hay resultados previos en la sesión
     if (session && session.lastResults && session.lastResults.length > 0) {
       console.log(`✅ Detectado número con resultados previos - es selección de propiedad`);
+      console.log(`🎯 Tipo detectado: property_detail`);
       return 'property_detail';
     }
     console.log(`❌ Número sin resultados previos - tratando como búsqueda`);
+    console.log(`🎯 Tipo detectado: property_search (número sin contexto)`);
     // Si el usuario escribió solo un número pero no hay resultados previos,
     // podría estar buscando propiedades con ese número de dormitorios
     return 'property_search';
   }
+  debugChecks.push('property_number: no match');
   
   // Por defecto, búsqueda de propiedades
+  console.log(`🔍 Debug checks: ${debugChecks.join(', ')}`);
+  console.log(`🎯 Tipo detectado: property_search (default)`);
   return 'property_search';
 }
 
@@ -130,15 +174,25 @@ function handleGreeting() {
   return {
     text: `¡Hola! 👋 Soy tu asistente de propiedades en Rosario.
 
-🏠 Puedo ayudarte a encontrar:
-• Departamentos y casas en alquiler
-• Filtrar por precio, zona, dormitorios
-• Mostrar detalles completos
+🏠 **¿Qué puedo hacer por ti?**
 
-💬 Ejemplos de búsquedas:
+📝 **Comandos principales:**
+• Escribe tu búsqueda (ej: "depto 2 dorm centro")
+• \`favoritos\` - Ver propiedades guardadas
+• \`historial\` - Ver búsquedas anteriores  
+• \`preferencias\` - Ver tus gustos guardados
+• \`ayuda\` - Ver menú completo
+
+💬 **Ejemplos de búsquedas:**
 • "Departamento 2 dormitorios en Centro hasta 400 mil"
-• "Casa con jardín en zona norte"
+• "Casa con jardín en zona norte"  
 • "Algo económico cerca del centro"
+
+✨ **Después de buscar podrás:**
+• Ver detalles: escribe el número (1-20)
+• Ver fotos: "foto [número]"
+• Guardar: "guardar [número]"
+• Más resultados: "más"
 
 ¿Qué tipo de propiedad estás buscando?`,
     context: {}
@@ -148,24 +202,41 @@ function handleGreeting() {
 // Manejar ayuda
 function handleHelp() {
   return {
-    text: `🤖 *Guía de uso del bot*
+    text: `🤖 **MENÚ PRINCIPAL - Asistente de Propiedades**
 
-📝 *Cómo buscar:*
-• Escribe de forma natural lo que buscas
-• Puedes especificar: tipo, zona, precio, dormitorios
+📋 **COMANDOS DISPONIBLES:**
 
-🔍 *Ejemplos de búsquedas:*
-• "Depto 2 dormitorios Centro hasta 350 mil"
-• "Casa con cochera zona norte"
-• "Algo con balcón cerca del Parque España"
-• "Departamentos baratos"
+🔍 **BÚSQUEDAS:**
+• Escribe natural: "depto 2 dorm centro hasta 400mil"
+• \`más\` - Ver más resultados de tu última búsqueda
 
-📊 *Después de una búsqueda:*
-• Escribe el número (1-20) para ver detalles
-• Escribe "más" para ver más resultados
-• Haz una nueva búsqueda para refinar
+📂 **TUS DATOS:**
+• \`favoritos\` - Ver propiedades que guardaste
+• \`historial\` - Ver tus búsquedas anteriores
+• \`preferencias\` - Ver gustos que aprendí de ti
 
-¿En qué puedo ayudarte?`,
+✨ **ACCIONES CON RESULTADOS:**
+• Número (1-20) - Ver detalles de una propiedad
+• \`foto [número]\` - Ver foto específica (ej: "foto 5")
+• \`guardar [número]\` - Guardar como favorita
+
+📱 **NAVEGACIÓN:**
+• \`hola\` - Volver al inicio  
+• \`ayuda\` o \`menú\` - Ver este menú
+• Nueva búsqueda - Escribir lo que buscas
+
+🏠 **EJEMPLOS DE BÚSQUEDA:**
+• "Departamento 2 dormitorios Centro hasta 400 mil"
+• "Casa con jardín zona norte"
+• "Algo económico Pichincha"
+• "3 dormitorios con balcón"
+
+💡 **TIPS:**
+• Sé específico con ubicación y precio
+• Puedo recordar tus búsquedas y preferencias  
+• Usa números para navegar rápido
+
+¿Qué quieres hacer?`,
     context: {}
   };
 }
@@ -519,12 +590,20 @@ async function handleFavorites(session) {
 
   if (!favorites || favorites.length === 0) {
     return {
-      text: '📁 No tienes propiedades guardadas como favoritas.\n\n💡 Para guardar una propiedad, escribe "guardar [número]" cuando veas los resultados de búsqueda.',
+      text: `📁 No tienes propiedades guardadas como favoritas.
+
+💡 **Para guardar propiedades:**
+• Primero busca propiedades
+• Luego escribe "guardar [número]" 
+
+📱 **¿Qué quieres hacer?**
+• Buscar propiedades: escribe tu búsqueda
+• Menú principal: "ayuda"`,
       context: session.context
     };
   }
 
-  let message = `⭐ *Tus propiedades favoritas:*\n\n`;
+  let message = `⭐ **TUS PROPIEDADES FAVORITAS:**\n\n`;
 
   favorites.forEach((fav, index) => {
     const number = index + 1;
@@ -536,6 +615,11 @@ async function handleFavorites(session) {
   });
 
   message += `💡 Total: ${favorites.length} propiedad${favorites.length > 1 ? 'es' : ''} guardada${favorites.length > 1 ? 's' : ''}`;
+  
+  message += `\n\n📱 **OPCIONES:**\n`;
+  message += `• Ver detalles: escribe "propiedad [id]"\n`;
+  message += `• Nueva búsqueda: escribe lo que buscas\n`;
+  message += `• Menú: "ayuda"`;
 
   return {
     text: message,
@@ -557,12 +641,20 @@ async function handleSearchHistory(session) {
 
   if (!history || history.length === 0) {
     return {
-      text: '📋 No tienes búsquedas anteriores.\n\n💡 Realiza algunas búsquedas y aparecerán aquí para que puedas repetirlas fácilmente.',
+      text: `📋 No tienes búsquedas anteriores.
+
+💡 **Para crear historial:**
+• Realiza búsquedas de propiedades
+• Se guardarán automáticamente aquí
+
+📱 **¿Qué quieres hacer?**
+• Buscar propiedades: escribe tu búsqueda
+• Menú principal: "ayuda"`,
       context: session.context
     };
   }
 
-  let message = `📋 *Tu historial de búsquedas:*\n\n`;
+  let message = `📋 **TU HISTORIAL DE BÚSQUEDAS:**\n\n`;
 
   history.forEach((search, index) => {
     const number = index + 1;
@@ -586,7 +678,10 @@ async function handleSearchHistory(session) {
     message += `\n`;
   });
 
-  message += `💡 Para repetir una búsqueda, escribe algo similar a lo que buscaste antes.`;
+  message += `📱 **OPCIONES:**\n`;
+  message += `• Repetir búsqueda: copia y pega una consulta anterior\n`;
+  message += `• Nueva búsqueda: escribe lo que buscas\n`;
+  message += `• Menú: "ayuda"`;
 
   return {
     text: message,
@@ -606,11 +701,11 @@ async function handlePreferences(session) {
   const { getUserPreferencesData } = await import('./userManager.js');
   const preferences = await getUserPreferencesData(session.user.whatsapp_number);
 
-  let message = `⚙️ *Tus preferencias guardadas:*\n\n`;
+  let message = `⚙️ **TUS PREFERENCIAS GUARDADAS:**\n\n`;
 
   if (!preferences) {
     message += `📝 Aún no tienes preferencias guardadas.\n\n`;
-    message += `💡 Las preferencias se aprenden automáticamente de tus búsquedas:\n`;
+    message += `💡 **¿Cómo funciona el aprendizaje automático?**\n`;
     message += `• Tipo de propiedad más buscado\n`;
     message += `• Precio máximo preferido\n`;
     message += `• Cantidad de dormitorios usual\n`;
@@ -640,6 +735,11 @@ async function handlePreferences(session) {
     message += `\n📅 Última actualización: ${new Date(preferences.updated_at).toLocaleDateString('es-AR')}\n\n`;
     message += `💡 Estas preferencias se usan para mejorar tus búsquedas automáticamente.`;
   }
+  
+  message += `\n\n📱 **OPCIONES:**\n`;
+  message += `• Buscar con tus preferencias: escribe "recomendado"\n`;
+  message += `• Nueva búsqueda: escribe lo que buscas\n`;
+  message += `• Menú: "ayuda"`;
 
   return {
     text: message,
@@ -702,6 +802,121 @@ async function handleSaveProperty(message, session) {
   } else {
     return {
       text: '❌ Error guardando la propiedad. Puede que ya esté en tus favoritos.',
+      context: session.context
+    };
+  }
+}
+
+// Manejar búsqueda recomendada basada en preferencias
+async function handleRecommendedSearch(session) {
+  if (!session.user?.whatsapp_number) {
+    return {
+      text: '❌ Error accediendo a tus preferencias.',
+      context: session.context
+    };
+  }
+
+  const { getUserPreferencesData } = await import('./userManager.js');
+  const preferences = await getUserPreferencesData(session.user.whatsapp_number);
+
+  if (!preferences) {
+    return {
+      text: `🤖 Aún no tengo suficientes datos sobre tus gustos.
+
+💡 **Para crear recomendaciones personalizadas:**
+• Realiza algunas búsquedas de propiedades
+• El sistema aprenderá tus preferencias automáticamente
+• Luego podrás usar "recomendado" para búsquedas inteligentes
+
+📱 **¿Qué quieres hacer?**
+• Buscar propiedades: escribe tu búsqueda
+• Menú: "ayuda"`,
+      context: session.context
+    };
+  }
+
+  // Construir búsqueda basada en preferencias
+  let searchQuery = 'propiedades recomendadas';
+  const filters = {};
+
+  if (preferences.property_type) {
+    searchQuery = `${preferences.property_type.toLowerCase()} recomendado`;
+    filters.propertyType = preferences.property_type;
+  }
+
+  if (preferences.bedrooms) {
+    filters.bedrooms = preferences.bedrooms;
+  }
+
+  if (preferences.max_price) {
+    filters.priceMax = preferences.max_price;
+  }
+
+  if (preferences.neighborhoods) {
+    try {
+      const neighborhoods = JSON.parse(preferences.neighborhoods);
+      if (neighborhoods.length > 0) {
+        filters.neighborhood = neighborhoods[0]; // Usar el primer barrio preferido
+        searchQuery += ` en ${neighborhoods[0]}`;
+      }
+    } catch (error) {
+      // Ignorar error de parsing
+    }
+  }
+
+  console.log(`🎯 Búsqueda recomendada para usuario: ${session.user.whatsapp_number}`);
+  console.log(`📋 Preferencias aplicadas:`, preferences);
+  console.log(`🔍 Query generado: "${searchQuery}"`, filters);
+
+  // Usar la función de búsqueda normal pero con filtros de preferencias
+  try {
+    const results = await searchProperties(searchQuery, filters, { offset: 0, limit: 20 });
+
+    if (results.properties.length === 0) {
+      return {
+        text: `🤖 No encontré propiedades que coincidan con tus preferencias actuales.
+
+📋 **Tus preferencias:**
+${preferences.property_type ? `• Tipo: ${preferences.property_type}` : ''}
+${preferences.bedrooms ? `• Dormitorios: ${preferences.bedrooms}` : ''}
+${preferences.max_price ? `• Precio máximo: $${preferences.max_price.toLocaleString('es-AR')}` : ''}
+
+💡 **Sugerencias:**
+• Busca manualmente para ampliar tus preferencias
+• Las preferencias se ajustarán automáticamente
+
+📱 **Opciones:**
+• Nueva búsqueda: escribe lo que buscas
+• Menú: "ayuda"`,
+        context: session.context
+      };
+    }
+
+    const summary = createSearchSummary({ query: searchQuery, filters }, results);
+    const formattedList = formatPropertyList(results.properties, '🎯 *Propiedades recomendadas para ti:*', results.total, results.hasMore);
+
+    // Actualizar la sesión con los resultados
+    session.lastResults = results.properties;
+    session.lastQuery = searchQuery;
+    session.lastFilters = filters;
+    session.currentOffset = 0;
+
+    return {
+      text: `${summary}\n\n${formattedList}`,
+      properties: results.properties,
+      context: {
+        ...session.context,
+        lastQuery: searchQuery,
+        lastFilters: filters,
+        lastResults: results.properties,
+        currentOffset: 0
+      }
+    };
+
+  } catch (error) {
+    console.error('Error en búsqueda recomendada:', error);
+    return {
+      text: '❌ Error realizando búsqueda recomendada. Por favor, intenta de nuevo.',
       context: session.context
     };
   }
