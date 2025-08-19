@@ -33,6 +33,8 @@ export function initializeDatabase() {
   } catch (error) {
     console.error('❌ Error inicializando base de datos:', error);
     console.log('⚠️  El sistema funcionará solo con memoria temporal');
+    console.log('ℹ️  Funciones disponibles: búsqueda, detalles, fotos (contexto se mantiene durante la sesión)');
+    console.log('ℹ️  Funciones no disponibles: favoritos, historial, preferencias persistentes');
     dbInitialized = false;
     return false;
   }
