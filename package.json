@@ -1,16 +1,33 @@
 {
-  "name": "argyv2",
+  "name": "rosario-properties-bot",
   "version": "1.0.0",
+  "description": "Bot de WhatsApp para consulta de propiedades en Rosario",
   "type": "module",
-  "main": "index.js",
+  "main": "src/server.js",
   "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "build": "echo 'No build step required'",
+    "load-data": "node scripts/loadToQdrant.js",
+    "load-multiple": "node scripts/loadMultipleFiles.js",
+    "load-fixed": "node scripts/fixedLoader.js",
+    "load-final": "node scripts/finalLoader.js",
+    "setup": "node scripts/setup.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
+  "keywords": ["whatsapp", "bot", "real-estate", "qdrant"],
   "author": "",
   "license": "ISC",
-  "description": "",
   "dependencies": {
-    "playwright": "^1.54.2"
+    "@qdrant/js-client-rest": "^1.7.0",
+    "express": "^4.18.2",
+    "dotenv": "^16.3.1",
+    "openai": "^4.20.0",
+    "axios": "^1.6.2",
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
   }
 }
