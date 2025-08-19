@@ -271,6 +271,23 @@ export async function getUserFavorites(userId) {
   }
 }
 
+export async function updateUser(userId, updates) {
+  try {
+    const fields = Object.keys(updates).map((key, index) => `${key} = $${index + 2}`).join(', ');
+    const values = Object.values(updates);
+    
+    await pool.query(`
+      UPDATE users SET ${fields}, last_activity = CURRENT_TIMESTAMP
+      WHERE id = $1
+    `, [userId, ...values]);
+    
+    return true;
+  } catch (error) {
+    console.error('❌ Error actualizando usuario:', error);
+    return false;
+  }
+}
+
 export async function incrementUserSearches(userId) {
   try {
     await pool.query(
