@@ -13,6 +13,7 @@ const DB_PATH = process.env.NODE_ENV === 'production'
 
 // Instancia de base de datos (singleton)
 let db = null;
+let dbInitialized = false;
 
 // Inicializar base de datos
 export function initializeDatabase() {
@@ -27,9 +28,12 @@ export function initializeDatabase() {
     createTables();
     
     console.log('✅ Base de datos SQLite inicializada correctamente');
+    dbInitialized = true;
     return true;
   } catch (error) {
     console.error('❌ Error inicializando base de datos:', error);
+    console.log('⚠️  El sistema funcionará solo con memoria temporal');
+    dbInitialized = false;
     return false;
   }
 }
@@ -107,10 +111,15 @@ function createTables() {
 
 // Obtener conexión de base de datos
 export function getDatabase() {
-  if (!db) {
+  if (!db && !dbInitialized) {
     initializeDatabase();
   }
   return db;
+}
+
+// Verificar si la base de datos está disponible
+export function isDatabaseAvailable() {
+  return dbInitialized && db !== null;
 }
 
 // Cerrar conexión (para cleanup)
@@ -127,6 +136,21 @@ export function closeDatabase() {
 // Crear o obtener usuario
 export function getOrCreateUser(whatsappNumber, firstName = null) {
   const database = getDatabase();
+  
+  if (!isDatabaseAvailable()) {
+    console.log('⚠️  SQLite no disponible, usando datos temporales');
+    // Retornar usuario temporal para mantener funcionamiento
+    const cleanNumber = whatsappNumber.replace(/[^0-9]/g, '');
+    return {
+      id: cleanNumber, // Usar número como ID temporal
+      whatsapp_number: cleanNumber,
+      first_name: firstName,
+      created_at: new Date().toISOString(),
+      last_activity: new Date().toISOString(),
+      total_searches: 0,
+      status: 'active'
+    };
+  }
   
   try {
     // Limpiar número de WhatsApp (solo dígitos)
@@ -189,6 +213,10 @@ export function updateUser(userId, updates) {
 
 // Incrementar contador de búsquedas
 export function incrementUserSearches(userId) {
+  if (!isDatabaseAvailable()) {
+    return false; // Sin SQLite, no se puede incrementar
+  }
+  
   const database = getDatabase();
   
   try {
@@ -210,6 +238,10 @@ export function incrementUserSearches(userId) {
 
 // Obtener preferencias del usuario
 export function getUserPreferences(userId) {
+  if (!isDatabaseAvailable()) {
+    return null; // Sin SQLite, no hay preferencias persistentes
+  }
+  
   const database = getDatabase();
   
   try {
@@ -236,6 +268,11 @@ export function getUserPreferences(userId) {
 
 // Guardar/actualizar preferencias del usuario
 export function saveUserPreferences(userId, preferences) {
+  if (!isDatabaseAvailable()) {
+    console.log('⚠️  SQLite no disponible, preferencias no se guardarán');
+    return false;
+  }
+  
   const database = getDatabase();
   
   try {
@@ -274,6 +311,11 @@ export function saveUserPreferences(userId, preferences) {
 
 // Guardar búsqueda en historial
 export function saveSearchHistory(userId, query, filters, resultsCount = 0) {
+  if (!isDatabaseAvailable()) {
+    console.log('⚠️  SQLite no disponible, historial no se guardará');
+    return false;
+  }
+  
   const database = getDatabase();
   
   try {
@@ -302,6 +344,10 @@ export function saveSearchHistory(userId, query, filters, resultsCount = 0) {
 
 // Obtener historial de búsquedas
 export function getSearchHistory(userId, limit = 10) {
+  if (!isDatabaseAvailable()) {
+    return []; // Sin SQLite, no hay historial
+  }
+  
   const database = getDatabase();
   
   try {
@@ -327,6 +373,11 @@ export function getSearchHistory(userId, limit = 10) {
 
 // Guardar propiedad como favorita
 export function savePropertyAsFavorite(userId, propertyId, title = null, price = null) {
+  if (!isDatabaseAvailable()) {
+    console.log('⚠️  SQLite no disponible, favorito no se guardará');
+    return false;
+  }
+  
   const database = getDatabase();
   
   try {
@@ -346,6 +397,10 @@ export function savePropertyAsFavorite(userId, propertyId, title = null, price =
 
 // Obtener propiedades favoritas
 export function getUserFavorites(userId) {
+  if (!isDatabaseAvailable()) {
+    return []; // Sin SQLite, no hay favoritos
+  }
+  
   const database = getDatabase();
   
   try {
@@ -362,6 +417,10 @@ export function getUserFavorites(userId) {
 
 // Eliminar favorito
 export function removeFavorite(userId, propertyId) {
+  if (!isDatabaseAvailable()) {
+    return false; // Sin SQLite, no se puede eliminar
+  }
+  
   const database = getDatabase();
   
   try {
