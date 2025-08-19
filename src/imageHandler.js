@@ -4,25 +4,54 @@ import { sendWhatsAppImage } from './ultramsgClient.js';
 // Enviar primera imagen de una propiedad
 export async function sendPropertyImage(userPhone, property) {
   try {
+    console.log(`📸 Intentando enviar imagen para propiedad:`, {
+      id: property.id || property.originalId,
+      title: property.title,
+      photos: property.photos?.length || 0,
+      firstPhoto: property.photos?.[0]
+    });
+    
     if (!property.photos || property.photos.length === 0) {
+      console.log('❌ Propiedad sin fotos disponibles');
       return { success: false, message: 'Propiedad sin fotos' };
     }
     
     // Tomar primera imagen
     const imageUrl = property.photos[0];
     
-    // Caption con info básica
-    const caption = `🏠 ${property.title}\n` +
-                   `📍 ${property.neighborhood}\n` +
-                   `💰 ${property.priceFormatted}\n` +
-                   `🔗 Ver más: ${property.url}`;
+    // Caption con info mejorada
+    const title = property.title && property.title !== 'Sin título' ? property.title : 
+                  `${property.propertyType || 'Propiedad'} ${property.bedrooms ? property.bedrooms + ' dorm.' : ''}`;
+    
+    const location = property.address && property.address !== 'Sin especificar' ? property.address :
+                    property.neighborhood && property.neighborhood !== 'Sin especificar' ? property.neighborhood :
+                    'Rosario, Santa Fe';
+    
+    const price = property.priceFormatted || 
+                 (property.price > 0 ? `$${property.price.toLocaleString('es-AR')}` : 'Consultar precio');
+    
+    const caption = `🏠 *${title}*\n` +
+                   `📍 ${location}\n` +
+                   `💰 ${price}\n` +
+                   `🏠 ${property.totalArea ? property.totalArea + 'm²' : ''} | ` +
+                   `🛏️ ${property.bedrooms || 0} | 🚿 ${property.bathrooms || 0}\n` +
+                   `🔗 ${property.url || 'Ver en Zonaprop'}`;
+    
+    console.log(`📤 Enviando imagen: ${imageUrl.substring(0, 100)}...`);
+    console.log(`📝 Caption: ${caption.substring(0, 100)}...`);
     
     const result = await sendWhatsAppImage(userPhone, imageUrl, caption);
+    
+    if (result.success) {
+      console.log(`✅ Imagen enviada exitosamente`);
+    } else {
+      console.log(`❌ Error enviando imagen:`, result);
+    }
     
     return { success: true, result };
     
   } catch (error) {
-    console.error('Error enviando imagen:', error);
+    console.error('❌ Error enviando imagen:', error);
     return { success: false, error: error.message };
   }
 }

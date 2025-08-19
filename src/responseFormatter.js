@@ -101,13 +101,31 @@ function getPropertyEmoji(propertyType) {
 
 // Formatear título de propiedad
 function formatPropertyTitle(property) {
+  // Usar el título original si existe y no es genérico
+  if (property.title && 
+      property.title !== 'Sin título' && 
+      property.title !== 'Sin especificar' &&
+      property.title.length > 10) {
+    return property.title.substring(0, 50);
+  }
+  
+  // Construir título descriptivo
   let title = property.propertyType || 'Propiedad';
   
   if (property.bedrooms > 0) {
     title += ` ${property.bedrooms} dorm.`;
   }
   
-  if (property.neighborhood) {
+  if (property.bathrooms > 0) {
+    title += ` ${property.bathrooms} baños`;
+  }
+  
+  if (property.totalArea > 0) {
+    title += ` ${property.totalArea}m²`;
+  }
+  
+  // Agregar barrio si está disponible
+  if (property.neighborhood && property.neighborhood !== 'Sin especificar') {
     title += ` - ${property.neighborhood}`;
   }
   
@@ -118,17 +136,33 @@ function formatPropertyTitle(property) {
 function formatLocation(property) {
   const parts = [];
   
-  if (property.neighborhood) {
+  // Agregar dirección si existe y no es genérica
+  if (property.address && 
+      property.address !== 'Sin especificar' && 
+      property.address.length > 5) {
+    // Mostrar dirección completa pero limitada
+    const address = property.address.substring(0, 40);
+    parts.push(address);
+  }
+  
+  // Agregar barrio si es diferente de la dirección
+  if (property.neighborhood && 
+      property.neighborhood !== 'Sin especificar' &&
+      !property.address?.includes(property.neighborhood)) {
     parts.push(property.neighborhood);
   }
   
-  if (property.address && property.address !== property.neighborhood) {
-    // Mostrar solo primeras palabras de la dirección para ahorrar espacio
-    const shortAddress = property.address.split(' ').slice(0, 3).join(' ');
-    parts.push(shortAddress);
+  // Si no tenemos dirección específica, mostrar al menos barrio y ciudad
+  if (parts.length === 0) {
+    if (property.neighborhood && property.neighborhood !== 'Sin especificar') {
+      parts.push(property.neighborhood);
+    }
+    if (property.city && property.city !== 'Sin especificar') {
+      parts.push(property.city);
+    }
   }
   
-  return parts.join(' - ') || 'Ubicación no especificada';
+  return parts.join(', ') || 'Rosario, Santa Fe';
 }
 
 // Formatear precio

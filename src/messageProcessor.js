@@ -75,9 +75,15 @@ function detectMessageType(message, session) {
     return 'photo_request';
   }
   
-  // Número de propiedad (1-10)
-  if (/^[1-9]$|^10$/.test(lowerMessage) && session.lastResults?.length > 0) {
-    return 'property_detail';
+  // Número de propiedad (1-10) - hacer más flexible
+  if (/^[1-9]$|^10$/.test(lowerMessage)) {
+    // Verificar si hay resultados previos en la sesión
+    if (session.lastResults?.length > 0) {
+      return 'property_detail';
+    }
+    // Si el usuario escribió solo un número pero no hay resultados previos,
+    // podría estar buscando propiedades con ese número de dormitorios
+    return 'property_search';
   }
   
   // Por defecto, búsqueda de propiedades
@@ -134,14 +140,23 @@ async function handlePropertyDetail(message, session) {
   const propertyIndex = parseInt(message) - 1;
   const properties = session.lastResults || [];
   
+  console.log(`🔍 Solicitando detalles de propiedad #${message}, índice: ${propertyIndex}`);
+  console.log(`📋 Propiedades disponibles: ${properties.length}`);
+  
   if (propertyIndex < 0 || propertyIndex >= properties.length) {
     return {
-      text: '❌ Número de propiedad inválido. Por favor, elige un número del 1 al 10.',
+      text: `❌ Número inválido. Elige un número del 1 al ${properties.length}.
+      
+🔍 Para ver detalles de una propiedad:
+• Primero busca propiedades 
+• Luego escribe el número (1-${Math.min(10, properties.length)})`,
       context: session.context
     };
   }
   
   const property = properties[propertyIndex];
+  
+  console.log(`✅ Mostrando detalles de: ${property.title || property.propertyType}`);
   
   return {
     text: formatPropertyDetails(property),

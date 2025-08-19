@@ -27,37 +27,41 @@ export async function searchProperties(query, filters = {}, options = {}) {
     // Generar embedding para la consulta
     const queryEmbedding = await generateQueryEmbedding(query);
     
-    // Construir filtros de Qdrant
+    // Construir filtros de Qdrant (por ahora sin filtros)
     const qdrantFilter = buildQdrantFilter(filters);
     
-    // Realizar búsqueda en Qdrant
+    // Realizar búsqueda en Qdrant - obtener más resultados para filtrar después
+    const searchLimit = Math.max(50, (limit + offset) * 3);
     const searchResults = await qdrant.search(COLLECTION_NAME, {
       vector: queryEmbedding,
       filter: qdrantFilter,
-      limit: limit + offset, // Obtener más para hacer offset
+      limit: searchLimit,
       with_payload: true,
       score_threshold: 0.1 // Umbral mínimo de similitud
     });
     
-    // Aplicar offset manualmente (Qdrant no tiene offset nativo en search)
-    const paginatedResults = searchResults.slice(offset, offset + limit);
+    // Aplicar filtros post-búsqueda manualmente
+    let filteredResults = applyPostSearchFilters(searchResults, filters);
     
-    // Procesar y rankear resultados
-    const processedProperties = paginatedResults.map(result => ({
+    // Calcular scores de relevancia
+    filteredResults = filteredResults.map(result => ({
       ...result.payload,
       score: result.score,
       relevanceScore: calculateRelevanceScore(result.payload, filters, result.score)
     }));
     
     // Ordenar por relevancia
-    processedProperties.sort((a, b) => b.relevanceScore - a.relevanceScore);
+    filteredResults.sort((a, b) => b.relevanceScore - a.relevanceScore);
     
-    console.log(`✅ Encontradas ${processedProperties.length} propiedades`);
+    // Aplicar paginación
+    const paginatedResults = filteredResults.slice(offset, offset + limit);
+    
+    console.log(`✅ Encontradas ${paginatedResults.length} propiedades (${filteredResults.length} total después de filtros)`);
     
     return {
-      properties: processedProperties,
-      total: searchResults.length,
-      hasMore: searchResults.length > offset + limit
+      properties: paginatedResults,
+      total: filteredResults.length,
+      hasMore: filteredResults.length > offset + limit
     };
     
   } catch (error) {
@@ -86,6 +90,84 @@ function buildQdrantFilter(filters) {
   // Por ahora, no usar filtros de Qdrant hasta que se configuren los índices
   // Solo usar búsqueda semántica
   return undefined;
+}
+
+// Aplicar filtros después de la búsqueda semántica
+function applyPostSearchFilters(searchResults, filters) {
+  if (!filters || Object.keys(filters).length === 0) {
+    return searchResults;
+  }
+  
+  return searchResults.filter(result => {
+    const property = result.payload;
+    
+    // Filtro por precio
+    if (filters.priceMin && property.price < filters.priceMin) {
+      return false;
+    }
+    if (filters.priceMax && property.price > filters.priceMax) {
+      return false;
+    }
+    
+    // Filtro por dormitorios (exacto)
+    if (filters.bedrooms && property.bedrooms !== filters.bedrooms) {
+      return false;
+    }
+    
+    // Filtro por baños (mínimo)
+    if (filters.bathrooms && property.bathrooms < filters.bathrooms) {
+      return false;
+    }
+    
+    // Filtro por tipo de propiedad
+    if (filters.propertyType) {
+      const propertyTypeLower = property.propertyType?.toLowerCase() || '';
+      const filterTypeLower = filters.propertyType.toLowerCase();
+      
+      // Coincidencia flexible para tipos de propiedad
+      if (!propertyTypeLower.includes(filterTypeLower) && 
+          !filterTypeLower.includes(propertyTypeLower)) {
+        return false;
+      }
+    }
+    
+    // Filtro por barrio
+    if (filters.neighborhood) {
+      const neighborhoodLower = property.neighborhood?.toLowerCase() || '';
+      const addressLower = property.address?.toLowerCase() || '';
+      const filterNeighborhood = filters.neighborhood.toLowerCase();
+      
+      if (!neighborhoodLower.includes(filterNeighborhood) && 
+          !addressLower.includes(filterNeighborhood)) {
+        return false;
+      }
+    }
+    
+    // Filtro por características
+    if (filters.hasFeatures && filters.hasFeatures.length > 0) {
+      const hasRequiredFeatures = filters.hasFeatures.some(feature => {
+        switch (feature) {
+          case 'balcony': return property.hasBalcony;
+          case 'terrace': return property.hasTerrace;
+          case 'garage': return property.garages > 0;
+          case 'pool': return property.hasPool;
+          case 'garden': return property.hasGarden;
+          default: return false;
+        }
+      });
+      
+      if (!hasRequiredFeatures) {
+        return false;
+      }
+    }
+    
+    // Excluir propiedades reservadas por defecto
+    if (property.reserved) {
+      return false;
+    }
+    
+    return true;
+  });
 }
 
 // Calcular score de relevancia personalizado
