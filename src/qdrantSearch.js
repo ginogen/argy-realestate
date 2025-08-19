@@ -43,6 +43,38 @@ export async function searchProperties(query, filters = {}, options = {}) {
     // Aplicar filtros post-búsqueda manualmente
     let filteredResults = applyPostSearchFilters(searchResults, filters);
     
+    // Fallback: si hay muy pocos resultados exactos y se pidieron dormitorios específicos,
+    // intentar búsqueda flexible (±1 dormitorio)
+    if (filteredResults.length < 5 && filters.bedrooms) {
+      console.log(`⚠️ Solo ${filteredResults.length} resultados exactos. Intentando búsqueda flexible...`);
+      
+      const flexibleFilters = { ...filters };
+      // Temporalmente remover filtro exacto de dormitorios para búsqueda flexible
+      const originalBedrooms = flexibleFilters.bedrooms;
+      delete flexibleFilters.bedrooms;
+      
+      const flexibleResults = applyPostSearchFilters(searchResults, flexibleFilters)
+        .filter(result => {
+          const property = result.payload;
+          const propertyBedrooms = property.bedrooms || 0;
+          // Aceptar ±1 dormitorio solo como fallback
+          return propertyBedrooms >= originalBedrooms - 1 && propertyBedrooms <= originalBedrooms + 1;
+        });
+      
+      // Combinar resultados: exactos primero, luego flexibles
+      const exactResults = filteredResults;
+      const additionalResults = flexibleResults
+        .filter(flexResult => !exactResults.some(exactResult => 
+          exactResult.payload.originalId === flexResult.payload.originalId))
+        .slice(0, Math.max(0, 15 - exactResults.length));
+      
+      filteredResults = [...exactResults, ...additionalResults];
+      
+      if (additionalResults.length > 0) {
+        console.log(`✅ Agregados ${additionalResults.length} resultados similares (±1 dormitorio)`);
+      }
+    }
+    
     // Eliminar duplicados basados en originalId o título
     const uniqueResults = removeDuplicateProperties(filteredResults);
     
@@ -112,14 +144,9 @@ function applyPostSearchFilters(searchResults, filters) {
       return false;
     }
     
-    // Filtro por dormitorios (flexible: ±1 dormitorio)
-    if (filters.bedrooms) {
-      const requestedBedrooms = filters.bedrooms;
-      const propertyBedrooms = property.bedrooms || 0;
-      // Aceptar propiedades con ±1 dormitorio del solicitado
-      if (propertyBedrooms < requestedBedrooms - 1 || propertyBedrooms > requestedBedrooms + 1) {
-        return false;
-      }
+    // Filtro por dormitorios (exacto)
+    if (filters.bedrooms && property.bedrooms !== filters.bedrooms) {
+      return false;
     }
     
     // Filtro por baños (mínimo)
@@ -221,12 +248,8 @@ function calculateRelevanceScore(property, filters, vectorScore) {
   let score = vectorScore * 100; // Base score del embedding
   
   // Boost por coincidencias exactas de dormitorios
-  if (filters.bedrooms) {
-    if (property.bedrooms === filters.bedrooms) {
-      score += 30; // Boost alto por coincidencia exacta
-    } else if (Math.abs(property.bedrooms - filters.bedrooms) === 1) {
-      score += 15; // Boost medio por ±1 dormitorio
-    }
+  if (filters.bedrooms && property.bedrooms === filters.bedrooms) {
+    score += 25; // Boost por coincidencia exacta
   }
   
   if (filters.propertyType && property.propertyType === filters.propertyType) {

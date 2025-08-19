@@ -1,10 +1,11 @@
 // imageHandler.js - Manejo de imágenes para WhatsApp
 import { sendWhatsAppImage } from './ultramsgClient.js';
+import { shortenUrl } from './urlShortener.js';
 
-// Enviar primera imagen de una propiedad
+// Enviar imágenes de una propiedad (hasta 5 imágenes)
 export async function sendPropertyImage(userPhone, property) {
   try {
-    console.log(`📸 Intentando enviar imagen para propiedad:`, {
+    console.log(`📸 Intentando enviar imágenes para propiedad:`, {
       id: property.id || property.originalId,
       title: property.title,
       photos: property.photos?.length || 0,
@@ -16,48 +17,44 @@ export async function sendPropertyImage(userPhone, property) {
       return { success: false, message: 'Propiedad sin fotos' };
     }
     
-    // Tomar primera imagen
-    const imageUrl = property.photos[0];
+    // Decidir cuántas imágenes enviar
+    const maxImages = Math.min(5, property.photos.length);
+    console.log(`📸 Enviando ${maxImages} imagen(es) de ${property.photos.length} disponibles`);
     
-    // Caption con info mejorada
-    const title = property.title && property.title !== 'Sin título' ? property.title : 
-                  `${property.propertyType || 'Propiedad'} ${property.bedrooms ? property.bedrooms + ' dorm.' : ''}`;
-    
-    const location = property.address && property.address !== 'Sin especificar' ? property.address :
-                    property.neighborhood && property.neighborhood !== 'Sin especificar' ? property.neighborhood :
-                    'Rosario, Santa Fe';
-    
-    const price = property.priceFormatted || 
-                 (property.price > 0 ? `$${property.price.toLocaleString('es-AR')}` : 'Consultar precio');
-    
-    const caption = `🏠 *${title}*\n` +
-                   `📍 ${location}\n` +
-                   `💰 ${price}\n` +
-                   `🏠 ${property.totalArea ? property.totalArea + 'm²' : ''} | ` +
-                   `🛏️ ${property.bedrooms || 0} | 🚿 ${property.bathrooms || 0}\n` +
-                   `🔗 ${property.url || 'Ver propiedad'}`;
-    
-    console.log(`📤 Enviando imagen: ${imageUrl.substring(0, 100)}...`);
-    console.log(`📝 Caption: ${caption.substring(0, 100)}...`);
-    
-    const result = await sendWhatsAppImage(userPhone, imageUrl, caption);
-    
-    if (result.success) {
-      console.log(`✅ Imagen enviada exitosamente`);
-    } else {
-      console.log(`❌ Error enviando imagen:`, result);
+    // Si solo hay 1 imagen, usar lógica simple
+    if (property.photos.length === 1) {
+      return await sendSinglePropertyImage(userPhone, property);
     }
     
-    return { success: true, result };
+    // Para múltiples imágenes, usar galería
+    return await sendPropertyGallery(userPhone, property, maxImages);
     
   } catch (error) {
-    console.error('❌ Error enviando imagen:', error);
+    console.error('❌ Error enviando imágenes:', error);
     return { success: false, error: error.message };
   }
 }
 
-// Enviar galería de imágenes (máximo 3)
-export async function sendPropertyGallery(userPhone, property, maxImages = 3) {
+// Función auxiliar para enviar una sola imagen 
+async function sendSinglePropertyImage(userPhone, property) {
+  const imageUrl = property.photos[0];
+  const caption = `📸 1/1`;
+  
+  console.log(`📤 Enviando imagen única: ${imageUrl.substring(0, 100)}...`);
+  
+  const result = await sendWhatsAppImage(userPhone, imageUrl, caption);
+  
+  if (result.success) {
+    console.log(`✅ Imagen enviada exitosamente`);
+  } else {
+    console.log(`❌ Error enviando imagen:`, result);
+  }
+  
+  return { success: true, result };
+}
+
+// Enviar galería de imágenes (hasta 5)
+export async function sendPropertyGallery(userPhone, property, maxImages = 5) {
   try {
     if (!property.photos || property.photos.length === 0) {
       return { success: false, message: 'Propiedad sin fotos' };
@@ -69,27 +66,33 @@ export async function sendPropertyGallery(userPhone, property, maxImages = 3) {
     for (let i = 0; i < imagesToSend.length; i++) {
       const imageUrl = imagesToSend[i];
       
-      // Caption solo para primera imagen
-      let caption = '';
-      if (i === 0) {
-        caption = `🏠 ${property.title}\n` +
-                 `📍 ${property.address}\n` +
-                 `💰 ${property.priceFormatted}\n` +
-                 `📸 ${i + 1}/${property.photos.length} fotos`;
-      } else {
-        caption = `📸 ${i + 1}/${property.photos.length}`;
-      }
+      // Caption simple: solo numeración
+      let caption = `📸 ${i + 1}/${property.photos.length}`;
       
-      // Esperar entre imágenes
+      console.log(`📤 Enviando imagen ${i + 1}/${imagesToSend.length}: ${imageUrl.substring(0, 80)}...`);
+      
+      // Esperar entre imágenes para no saturar la API
       if (i > 0) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, 1500));
       }
       
       const result = await sendWhatsAppImage(userPhone, imageUrl, caption);
       results.push(result);
+      
+      if (!result.success) {
+        console.log(`⚠️ Error en imagen ${i + 1}, continuando con las siguientes...`);
+      }
     }
     
-    return { success: true, results, sentCount: imagesToSend.length };
+    const successfulSends = results.filter(r => r.success).length;
+    console.log(`✅ Galería enviada: ${successfulSends}/${imagesToSend.length} imágenes exitosas`);
+    
+    return { 
+      success: successfulSends > 0, 
+      results, 
+      sentCount: successfulSends,
+      totalImages: imagesToSend.length 
+    };
     
   } catch (error) {
     console.error('Error enviando galería:', error);

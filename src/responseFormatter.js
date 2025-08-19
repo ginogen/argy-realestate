@@ -1,5 +1,6 @@
 // responseFormatter.js - Formateador de respuestas para WhatsApp
 import { sendWhatsAppLocation } from './ultramsgClient.js';
+import { shortenUrl } from './urlShortener.js';
 
 // Formatear lista de propiedades
 export function formatPropertyList(properties, title = '🏠 *Propiedades encontradas:*', totalAvailable = null, hasMore = false) {
@@ -101,13 +102,22 @@ export function formatPropertyDetails(property) {
   
   // URL de la propiedad
   if (property.url) {
-    message += `\n🔗 *Ver:* ${property.url}\n`;
+    const shortUrl = shortenUrl(property.url);
+    message += `\n🔗 *Ver:* ${shortUrl}\n`;
   }
   
   // Fotos
   if (property.photosCount > 0) {
+    const imagesToSend = Math.min(5, property.photosCount);
     message += `\n📸 ${property.photosCount} foto${property.photosCount > 1 ? 's' : ''} disponible${property.photosCount > 1 ? 's' : ''}\n`;
-    message += `💡 Se enviará la primera foto automáticamente\n`;
+    
+    if (property.photosCount === 1) {
+      message += `💡 Se enviará la foto automáticamente\n`;
+    } else if (property.photosCount <= 5) {
+      message += `💡 Se enviarán todas las fotos automáticamente\n`;
+    } else {
+      message += `💡 Se enviarán las primeras 5 fotos automáticamente\n`;
+    }
   }
   
   // Score de relevancia (solo en desarrollo)
