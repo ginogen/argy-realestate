@@ -17,6 +17,48 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
+// Función para estimar total real de propiedades que coinciden
+async function estimateTotalResults(queryEmbedding, filters) {
+  try {
+    // Hacer búsqueda más amplia para estimar total
+    const estimationResults = await qdrant.search(COLLECTION_NAME, {
+      vector: queryEmbedding,
+      limit: 1000, // Muestra más grande para estimación
+      with_payload: true,
+      score_threshold: 0.02 // Aún más permisivo para estimación
+    });
+    
+    // Aplicar filtros a la muestra amplia
+    const filteredEstimation = applyPostSearchFilters(estimationResults, filters);
+    const uniqueEstimation = removeDuplicateProperties(filteredEstimation);
+    
+    // Estimar total basado en la muestra
+    // Si obtuvimos 1000 resultados y X pasaron filtros, proyectar al total
+    const totalProperties = await getTotalPropertiesCount();
+    const estimationRatio = uniqueEstimation.length / Math.min(estimationResults.length, 1000);
+    const estimatedTotal = Math.round(totalProperties * estimationRatio * 0.7); // Factor conservador
+    
+    console.log(`📊 Estimación: ${uniqueEstimation.length}/${estimationResults.length} en muestra → ~${estimatedTotal} total`);
+    
+    // Retornar al menos lo que encontramos, pero sugerir que hay más
+    return Math.max(uniqueEstimation.length, estimatedTotal);
+    
+  } catch (error) {
+    console.error('Error estimando total:', error);
+    return 100; // Fallback conservador
+  }
+}
+
+// Obtener conteo total de propiedades en la colección
+async function getTotalPropertiesCount() {
+  try {
+    const collectionInfo = await qdrant.getCollection(COLLECTION_NAME);
+    return collectionInfo.points_count || 3000; // Fallback
+  } catch (error) {
+    return 3000; // Fallback conocido
+  }
+}
+
 // Función principal de búsqueda
 export async function searchProperties(query, filters = {}, options = {}) {
   try {
@@ -30,14 +72,14 @@ export async function searchProperties(query, filters = {}, options = {}) {
     // Construir filtros de Qdrant (por ahora sin filtros)
     const qdrantFilter = buildQdrantFilter(filters);
     
-    // Realizar búsqueda en Qdrant - obtener más resultados para filtrar después
-    const searchLimit = Math.max(100, (limit + offset) * 4);
+    // Realizar búsqueda en Qdrant - obtener muchos más resultados para filtrar después
+    const searchLimit = Math.max(500, (limit + offset) * 10);
     const searchResults = await qdrant.search(COLLECTION_NAME, {
       vector: queryEmbedding,
       filter: qdrantFilter,
       limit: searchLimit,
       with_payload: true,
-      score_threshold: 0.05 // Umbral mínimo de similitud (más permisivo)
+      score_threshold: 0.03 // Umbral más permisivo para mayor cobertura
     });
     
     // Aplicar filtros post-búsqueda manualmente
@@ -78,6 +120,59 @@ export async function searchProperties(query, filters = {}, options = {}) {
     // Eliminar duplicados basados en originalId o título
     const uniqueResults = removeDuplicateProperties(filteredResults);
     
+    // Gestión inteligente de conteo total
+    let totalEstimated = uniqueResults.length;
+    
+    if (offset === 0) {
+      // Primera página: hacer estimación del total real
+      if (uniqueResults.length < searchLimit * 0.8) {
+        totalEstimated = await estimateTotalResults(queryEmbedding, filters);
+      }
+    } else {
+      // Páginas siguientes: si no tenemos suficientes resultados, buscar más
+      if (uniqueResults.length <= offset + limit) {
+        console.log(`📄 Página ${Math.floor(offset/limit)+1}: Buscando más resultados...`);
+        
+        // Búsqueda expandida para páginas siguientes
+        const expandedResults = await qdrant.search(COLLECTION_NAME, {
+          vector: queryEmbedding,
+          filter: buildQdrantFilter(filters),
+          limit: Math.max(1000, offset + limit + 100), // Buscar suficientes para esta página y más
+          with_payload: true,
+          score_threshold: 0.02
+        });
+        
+        const expandedFiltered = applyPostSearchFilters(expandedResults, filters);
+        const expandedUnique = removeDuplicateProperties(expandedFiltered);
+        
+        // Actualizar resultados con la búsqueda expandida
+        const expandedScored = expandedUnique.map(result => ({
+          ...result.payload,
+          score: result.score,
+          relevanceScore: calculateRelevanceScore(result.payload, filters, result.score)
+        }));
+        
+        expandedScored.sort((a, b) => b.relevanceScore - a.relevanceScore);
+        
+        totalEstimated = expandedScored.length;
+        
+        // Usar los resultados expandidos para esta paginación
+        const expandedPaginated = expandedScored.slice(offset, offset + limit);
+        const hasMoreExpanded = expandedScored.length > offset + limit;
+        
+        console.log(`✅ Búsqueda expandida: ${expandedPaginated.length} propiedades (${totalEstimated} total disponibles)`);
+        
+        return {
+          properties: expandedPaginated,
+          total: totalEstimated,
+          hasMore: hasMoreExpanded
+        };
+      } else {
+        // Tenemos suficientes resultados en la búsqueda inicial
+        totalEstimated = Math.max(uniqueResults.length, offset + limit + 20); // Sugerir que hay más
+      }
+    }
+    
     // Calcular scores de relevancia
     const scoredResults = uniqueResults.map(result => ({
       ...result.payload,
@@ -91,12 +186,15 @@ export async function searchProperties(query, filters = {}, options = {}) {
     // Aplicar paginación
     const paginatedResults = scoredResults.slice(offset, offset + limit);
     
-    console.log(`✅ Encontradas ${paginatedResults.length} propiedades (${filteredResults.length} total después de filtros)`);
+    // Calcular si hay más resultados disponibles
+    const hasMore = (offset + limit < totalEstimated) || (scoredResults.length > offset + limit);
+    
+    console.log(`✅ Encontradas ${paginatedResults.length} propiedades (${totalEstimated}+ total disponibles)`);
     
     return {
       properties: paginatedResults,
-      total: filteredResults.length,
-      hasMore: filteredResults.length > offset + limit
+      total: totalEstimated,
+      hasMore: hasMore
     };
     
   } catch (error) {
