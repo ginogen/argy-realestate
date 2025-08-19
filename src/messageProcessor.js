@@ -55,6 +55,9 @@ export async function processMessage(message, session) {
 function detectMessageType(message, session) {
   const lowerMessage = message.toLowerCase().trim();
   
+  console.log(`🔍 Detectando tipo de mensaje: "${message}"`);
+  console.log(`📊 Sesión tiene ${session?.lastResults?.length || 0} resultados previos`);
+  
   // Saludos
   if (/^(hola|hi|hello|buenos días|buenas tardes|buenas noches|hey)$/i.test(lowerMessage)) {
     return 'greeting';
@@ -75,12 +78,14 @@ function detectMessageType(message, session) {
     return 'photo_request';
   }
   
-  // Número de propiedad (1-10) - hacer más flexible
+  // Número de propiedad (1-10) - PRIORIDAD ALTA si hay resultados previos
   if (/^[1-9]$|^10$/.test(lowerMessage)) {
     // Verificar si hay resultados previos en la sesión
-    if (session.lastResults?.length > 0) {
+    if (session && session.lastResults && session.lastResults.length > 0) {
+      console.log(`✅ Detectado número con resultados previos - es selección de propiedad`);
       return 'property_detail';
     }
+    console.log(`❌ Número sin resultados previos - tratando como búsqueda`);
     // Si el usuario escribió solo un número pero no hay resultados previos,
     // podría estar buscando propiedades con ese número de dormitorios
     return 'property_search';
@@ -302,6 +307,12 @@ async function handlePropertySearch(message, session) {
     // Crear mensaje de resumen
     const summary = createSearchSummary(searchIntent, results);
     const formattedList = formatPropertyList(results.properties);
+    
+    // Actualizar la sesión con los resultados
+    session.lastResults = results.properties;
+    session.lastQuery = searchIntent.query;
+    session.lastFilters = searchIntent.filters;
+    session.currentOffset = 0;
     
     return {
       text: `${summary}\n\n${formattedList}`,

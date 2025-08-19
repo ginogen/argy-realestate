@@ -1,4 +1,4 @@
-// loadToQdrantCloud.js - Cargar propiedades en Qdrant Cloud para producción
+// finalLoader.js - Script actualizado para cargar propiedades con estructura correcta
 import { QdrantClient } from '@qdrant/js-client-rest';
 import OpenAI from 'openai';
 import fs from 'fs/promises';
@@ -14,7 +14,7 @@ const PROPERTY_FILES = [
 ];
 
 const COLLECTION_NAME = 'properties';
-const BATCH_SIZE = 5; // Muy pequeño para evitar timeouts
+const BATCH_SIZE = 10;
 const EMBEDDING_MODEL = 'text-embedding-3-small';
 
 // Usar configuración de producción
@@ -50,15 +50,21 @@ function cleanNumber(num) {
 function createEmbeddingText(property) {
   const parts = [];
   
-  if (property.title) parts.push(cleanString(property.title));
-  if (property.generatedTitle) parts.push(cleanString(property.generatedTitle));
+  // Usar el título real si existe
+  if (property.title && property.title !== 'Sin título') {
+    parts.push(cleanString(property.title));
+  }
+  if (property.generatedTitle) {
+    parts.push(cleanString(property.generatedTitle));
+  }
   
   const propertyType = property.realEstateType?.name;
-  const location = property.postingLocation?.name;
+  const location = property.postingLocation?.location?.name;
   if (propertyType || location) {
     parts.push(`${propertyType || 'Propiedad'} en ${location || 'zona'}`);
   }
   
+  // Usar la dirección correcta
   if (property.postingLocation?.address?.name) {
     parts.push(cleanString(property.postingLocation.address.name));
   }
@@ -82,7 +88,7 @@ function createEmbeddingText(property) {
   return text.substring(0, 2000);
 }
 
-// Función para extraer payload
+// Función para extraer payload con estructura correcta
 function extractPropertyPayload(property, sourceFile) {
   try {
     const price = property.priceOperationTypes?.[0]?.prices?.[0];
@@ -101,7 +107,8 @@ function extractPropertyPayload(property, sourceFile) {
       postingCode: cleanString(property.postingCode),
       sourceFile: path.basename(sourceFile),
       
-      title: cleanString(property.title) || 'Sin título',
+      // Usar el título real de la propiedad
+      title: cleanString(property.title) || cleanString(property.generatedTitle) || 'Sin título',
       generatedTitle: cleanString(property.generatedTitle),
       description: cleanString(property.description),
       
@@ -114,6 +121,7 @@ function extractPropertyPayload(property, sourceFile) {
       propertyTypeId: cleanNumber(property.realEstateType?.realEstateTypeId),
       operationType: cleanString(property.priceOperationTypes?.[0]?.operationType?.name) || 'Alquiler',
       
+      // Dirección correcta desde postingLocation.address.name
       address: cleanString(address.name) || 'Sin dirección',
       neighborhood: cleanString(location.name) || 'Sin especificar',
       city: cleanString(location.parent?.name) || 'Rosario',
@@ -185,7 +193,7 @@ async function generateEmbeddings(texts) {
 
 // Función principal
 async function main() {
-  console.log('🚀 Cargando propiedades en Qdrant Cloud...\n');
+  console.log('🚀 Cargando propiedades en Qdrant Cloud con estructura corregida...\n');
   
   // Verificar conexión
   try {
@@ -231,6 +239,7 @@ async function main() {
   globalIdCounter = 1;
   let totalProcessed = 0;
   let totalErrors = 0;
+  const allProperties = [];
   
   for (const filePath of PROPERTY_FILES) {
     console.log(`\n📂 Procesando: ${path.basename(filePath)}`);
@@ -240,54 +249,57 @@ async function main() {
       const properties = data.listPostings;
       console.log(`   📊 ${properties.length} propiedades encontradas`);
       
-      for (let i = 0; i < properties.length; i += BATCH_SIZE) {
-        const batch = properties.slice(i, i + BATCH_SIZE);
-        console.log(`   📦 Lote ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(properties.length/BATCH_SIZE)}`);
-        
-        try {
-          const payloads = [];
-          const embeddingTexts = [];
-          
-          for (const property of batch) {
-            const payload = extractPropertyPayload(property, filePath);
-            if (payload) {
-              const embeddingText = createEmbeddingText(property);
-              payload.embeddingText = embeddingText;
-              payloads.push(payload);
-              embeddingTexts.push(embeddingText);
-            }
-          }
-          
-          if (payloads.length > 0) {
-            const embeddings = await generateEmbeddings(embeddingTexts);
-            
-            const points = payloads.map((payload, idx) => ({
-              id: globalIdCounter++,
-              vector: embeddings[idx],
-              payload: payload
-            }));
-            
-            await qdrant.upsert(COLLECTION_NAME, {
-              wait: true,
-              points: points
-            });
-            
-            totalProcessed += payloads.length;
-            console.log(`      ✅ ${totalProcessed} propiedades procesadas`);
-          }
-          
-        } catch (error) {
-          console.error(`      ❌ Error en lote:`, error.message);
-          totalErrors += batch.length;
+      for (const property of properties) {
+        const payload = extractPropertyPayload(property, filePath);
+        if (payload) {
+          const embeddingText = createEmbeddingText(property);
+          payload.embeddingText = embeddingText;
+          allProperties.push({ payload, embeddingText });
         }
-        
-        // Pausa para no saturar
-        await new Promise(resolve => setTimeout(resolve, 3000));
       }
       
     } catch (error) {
       console.error(`❌ Error procesando archivo:`, error.message);
     }
+  }
+  
+  // Eliminar duplicados antes de cargar
+  console.log(`\n🔄 Eliminando duplicados...`);
+  const uniqueProperties = removeDuplicates(allProperties);
+  console.log(`   ✅ ${uniqueProperties.length} propiedades únicas de ${allProperties.length} totales`);
+  
+  // Cargar en lotes
+  console.log(`\n📤 Cargando propiedades únicas en Qdrant...`);
+  
+  for (let i = 0; i < uniqueProperties.length; i += BATCH_SIZE) {
+    const batch = uniqueProperties.slice(i, i + BATCH_SIZE);
+    console.log(`   📦 Lote ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(uniqueProperties.length/BATCH_SIZE)}`);
+    
+    try {
+      const embeddingTexts = batch.map(item => item.embeddingText);
+      const embeddings = await generateEmbeddings(embeddingTexts);
+      
+      const points = batch.map((item, idx) => ({
+        id: globalIdCounter++,
+        vector: embeddings[idx],
+        payload: item.payload
+      }));
+      
+      await qdrant.upsert(COLLECTION_NAME, {
+        wait: true,
+        points: points
+      });
+      
+      totalProcessed += batch.length;
+      console.log(`      ✅ ${totalProcessed} propiedades procesadas`);
+      
+    } catch (error) {
+      console.error(`      ❌ Error en lote:`, error.message);
+      totalErrors += batch.length;
+    }
+    
+    // Pausa para no saturar
+    await new Promise(resolve => setTimeout(resolve, 2000));
   }
   
   // Verificar resultado
@@ -299,10 +311,42 @@ async function main() {
   
   if (collectionInfo.points_count > 0) {
     console.log('\n✅ ¡Carga completada en Qdrant Cloud!');
-    console.log('🤖 El bot ya puede buscar propiedades');
+    console.log('🤖 El bot ya puede buscar propiedades con direcciones correctas');
   } else {
     console.log('\n❌ No se cargaron propiedades.');
   }
+}
+
+// Función para eliminar duplicados
+function removeDuplicates(properties) {
+  const seen = new Map();
+  const unique = [];
+  
+  for (const item of properties) {
+    const property = item.payload;
+    
+    // Crear clave única basada en originalId, título y dirección
+    const key1 = property.originalId || '';
+    const key2 = `${property.title}_${property.address}_${property.price}`;
+    
+    // Si el originalId existe y ya lo vimos, es duplicado
+    if (key1 && seen.has(key1)) {
+      continue;
+    }
+    
+    // Si la combinación título+dirección+precio ya existe, es probable duplicado
+    if (seen.has(key2)) {
+      continue;
+    }
+    
+    // Marcar como visto
+    if (key1) seen.set(key1, property);
+    seen.set(key2, property);
+    
+    unique.push(item);
+  }
+  
+  return unique;
 }
 
 main().catch(console.error);

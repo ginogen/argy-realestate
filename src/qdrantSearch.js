@@ -43,18 +43,21 @@ export async function searchProperties(query, filters = {}, options = {}) {
     // Aplicar filtros post-búsqueda manualmente
     let filteredResults = applyPostSearchFilters(searchResults, filters);
     
+    // Eliminar duplicados basados en originalId o título
+    const uniqueResults = removeDuplicateProperties(filteredResults);
+    
     // Calcular scores de relevancia
-    filteredResults = filteredResults.map(result => ({
+    const scoredResults = uniqueResults.map(result => ({
       ...result.payload,
       score: result.score,
       relevanceScore: calculateRelevanceScore(result.payload, filters, result.score)
     }));
     
     // Ordenar por relevancia
-    filteredResults.sort((a, b) => b.relevanceScore - a.relevanceScore);
+    scoredResults.sort((a, b) => b.relevanceScore - a.relevanceScore);
     
     // Aplicar paginación
-    const paginatedResults = filteredResults.slice(offset, offset + limit);
+    const paginatedResults = scoredResults.slice(offset, offset + limit);
     
     console.log(`✅ Encontradas ${paginatedResults.length} propiedades (${filteredResults.length} total después de filtros)`);
     
@@ -168,6 +171,50 @@ function applyPostSearchFilters(searchResults, filters) {
     
     return true;
   });
+}
+
+// Eliminar propiedades duplicadas
+function removeDuplicateProperties(results) {
+  const seen = new Map();
+  const unique = [];
+  
+  for (const result of results) {
+    const property = result.payload;
+    
+    // Crear clave única basada en originalId, título y dirección
+    const key1 = property.originalId || '';
+    const key2 = `${property.title}_${property.address}_${property.price}`;
+    const key3 = `${property.propertyType}_${property.bedrooms}_${property.totalArea}_${property.neighborhood}`;
+    
+    // Si el originalId existe y ya lo vimos, es duplicado
+    if (key1 && seen.has(key1)) {
+      continue;
+    }
+    
+    // Si la combinación título+dirección+precio ya existe, es probable duplicado
+    if (seen.has(key2)) {
+      continue;
+    }
+    
+    // Si la combinación tipo+dormitorios+área+barrio es muy similar, verificar
+    if (seen.has(key3)) {
+      const existing = seen.get(key3);
+      // Si el precio es el mismo, es muy probable que sea duplicado
+      if (existing.price === property.price) {
+        continue;
+      }
+    }
+    
+    // Marcar como visto
+    if (key1) seen.set(key1, property);
+    seen.set(key2, property);
+    seen.set(key3, property);
+    
+    unique.push(result);
+  }
+  
+  console.log(`🔄 Eliminados ${results.length - unique.length} duplicados de ${results.length} resultados`);
+  return unique;
 }
 
 // Calcular score de relevancia personalizado
