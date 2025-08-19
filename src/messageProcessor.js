@@ -162,10 +162,15 @@ async function handlePropertyDetail(message, session) {
   const property = properties[propertyIndex];
   
   console.log(`✅ Mostrando detalles de: ${property.title || property.propertyType}`);
+  console.log(`📸 Propiedad tiene ${property.photos?.length || 0} fotos`);
+  console.log(`🔍 Primera foto: ${property.photos?.[0]?.substring(0, 50) || 'Sin fotos'}`);
+  
+  const shouldSendImage = property.photos && property.photos.length > 0;
+  console.log(`📤 Enviar imagen: ${shouldSendImage}`);
   
   return {
     text: formatPropertyDetails(property),
-    sendImage: property.photos?.length > 0, // Flag para enviar imagen
+    sendImage: shouldSendImage, // Flag para enviar imagen
     property: property, // Para enviar imagen después
     context: {
       ...session.context,

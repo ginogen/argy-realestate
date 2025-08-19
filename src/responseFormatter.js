@@ -34,11 +34,18 @@ export function formatPropertyList(properties, title = '🏠 *Propiedades encont
 export function formatPropertyDetails(property) {
   const emoji = getPropertyEmoji(property.propertyType);
   
-  let message = `${emoji} *${property.title}*\n\n`;
+  // Título mejorado
+  const title = property.title && property.title !== 'Sin título' ? 
+    property.title : 
+    `${property.propertyType || 'Propiedad'} ${property.bedrooms ? property.bedrooms + ' dorm.' : ''}`;
+  
+  let message = `${emoji} *${title}*\n\n`;
   
   // Ubicación
   message += `📍 *Ubicación:*\n`;
-  message += `   ${property.address}\n`;
+  if (property.address && property.address !== 'Sin dirección') {
+    message += `   ${property.address}\n`;
+  }
   message += `   ${property.neighborhood}, ${property.city}\n\n`;
   
   // Precio
@@ -48,6 +55,15 @@ export function formatPropertyDetails(property) {
   // Características principales
   message += `🏠 *Características:*\n`;
   message += formatDetailedFeatures(property);
+  
+  // Descripción normalizada o normal
+  if (property.descriptionNormalized || property.description) {
+    message += `\n📝 *Descripción:*\n`;
+    const desc = property.descriptionNormalized || property.description;
+    // Limitar descripción a 500 caracteres para WhatsApp
+    const shortDesc = desc.length > 500 ? desc.substring(0, 497) + '...' : desc;
+    message += `${shortDesc}\n`;
+  }
   
   // Características especiales
   const amenities = getPropertyAmenities(property);
@@ -68,11 +84,14 @@ export function formatPropertyDetails(property) {
   }
   
   // URL de la propiedad
-  message += `\n🔗 *Ver más detalles:*\n${property.url}\n`;
+  if (property.url) {
+    message += `\n🔗 *Ver en Zonaprop:*\n${property.url}\n`;
+  }
   
   // Fotos
   if (property.photosCount > 0) {
     message += `\n📸 ${property.photosCount} foto${property.photosCount > 1 ? 's' : ''} disponible${property.photosCount > 1 ? 's' : ''}\n`;
+    message += `💡 Se enviará la primera foto automáticamente\n`;
   }
   
   // Score de relevancia (solo en desarrollo)

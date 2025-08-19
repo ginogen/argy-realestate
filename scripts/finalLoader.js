@@ -111,6 +111,7 @@ function extractPropertyPayload(property, sourceFile) {
       title: cleanString(property.title) || cleanString(property.generatedTitle) || 'Sin título',
       generatedTitle: cleanString(property.generatedTitle),
       description: cleanString(property.description),
+      descriptionNormalized: cleanString(property.descriptionNormalized) || cleanString(property.description),
       
       price: cleanNumber(price?.amount),
       currency: cleanString(price?.currency) || 'ARS',
