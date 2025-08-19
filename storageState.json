@@ -1,0 +1,264 @@
+{
+  "cookies": [
+    {
+      "name": "__cf_bm",
+      "value": "kwUq4YmPkoOpCN64reUTV.U0ZWwyQJzRFyrTjUoQZos-1755575719-1.0.1.1-5B00dVYjRBU8BOWI34t_fTWTdaFXpV0jRyjm56EeMHI3l.ErRIcosb8IQWWH892ya1t0bStpwR58B._77xz8qqfVt16xOYDgcOFkT3NGSHwUHT144Yo8y_6u40z9DMuC",
+      "domain": ".zonaprop.com.ar",
+      "path": "/",
+      "expires": 1755577519.187331,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "_cfuvid",
+      "value": "cNkAE_fRuCey4TstZ0GZQwVJOEOUDr3OibiUOWazXKs-1755575719221-0.0.1.1-604800000",
+      "domain": ".zonaprop.com.ar",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "__cf_bm",
+      "value": "i9rAvPv1wOJ0HBYm4Yau8K1zxmtNXuvuysA.9te3Pqk-1755575719-1.0.1.1-i_ReINqwOgngIdc5p1lixB0KsvnuO0nX65TwIZPhvWyiXi7ZE.EII_NaC_LtomW4BVgcl73wFG0Nhl.AQzYA9i4I982JH0wHkuiEqE3Tx6Y",
+      "domain": ".naventcdn.com",
+      "path": "/",
+      "expires": 1755577519.354687,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "__cf_bm",
+      "value": "l07hbMeKsxhi1IrAwLCUZ2eeQ.zc110dU0WQvCkD0AI-1755575719-1.0.1.1-kYImP7GRrK9npz6cylDc1wMHOrkFexEUmjBk62pjlylCtXWeco2n3hiEdABkCI4fRwgmgAOX1fCrQeTS2PAza73tvH6Do1LaEZwGr.sxeQs",
+      "domain": ".zonapropcdn.com",
+      "path": "/",
+      "expires": 1755577519.435848,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "cf_clearance",
+      "value": "NWGnnL_Yk793_o3yTQVwqHzu7aa_aq3JqqgLwNvsHfY-1755575719-1.2.1.1-h_sa_vima1Dp1SUBYEbiZJNh94hhjfJQtXywyomiywJ7EvtD7DD0dW3QC1olVun5z0yUdXX.b3rXp89eQh2oI1MP7ghZUfX0jvKoL3g0T8oLv2ehchAz0Ywe76O2lWzYpSHGgW0VbJJONDR_1gF3w.C8L8MPv6USsm5AcNOVJlHLVfXIxTnhO20yM8Y2JBbC.77N0lIwYhVNlldyP0nidLgVKI1a47IFLBecLjcwgZg",
+      "domain": ".zonaprop.com.ar",
+      "path": "/",
+      "expires": 1787111719.847555,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None",
+      "partitionKey": "https://zonaprop.com.ar",
+      "_crHasCrossSiteAncestor": false
+    },
+    {
+      "name": "_gcl_au",
+      "value": "1.1.579918249.1755575720",
+      "domain": ".zonaprop.com.ar",
+      "path": "/",
+      "expires": 1763351719,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "_fbp",
+      "value": "fb.3.1755575719874.5828569789",
+      "domain": "www.zonaprop.com.ar",
+      "path": "/",
+      "expires": 1763351719,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "_ga",
+      "value": "GA1.1.1737222849.1755575720",
+      "domain": ".zonaprop.com.ar",
+      "path": "/",
+      "expires": 1790135720.080058,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "_ga_68T3PL08E4",
+      "value": "GS2.1.s1755575720$o1$g1$t1755575720$j60$l0$h0",
+      "domain": ".zonaprop.com.ar",
+      "path": "/",
+      "expires": 1790135720.213775,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "UID",
+      "value": "1718f7ab1fb1bbf3c21c66b1755575720",
+      "domain": ".scorecardresearch.com",
+      "path": "/",
+      "expires": 1789271720.213898,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "XID",
+      "value": "1718f7ab1fb1bbf3c21c66b1755575720",
+      "domain": ".scorecardresearch.com",
+      "path": "/",
+      "expires": 1789271720.213911,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None",
+      "partitionKey": "https://zonaprop.com.ar",
+      "_crHasCrossSiteAncestor": true
+    },
+    {
+      "name": "__rtbh.lid",
+      "value": "%7B%22eventType%22%3A%22lid%22%2C%22id%22%3A%22ifDr5y6GZCjet8D002R1%22%2C%22expiryDate%22%3A%222026-08-19T03%3A55%3A20.418Z%22%7D",
+      "domain": "www.zonaprop.com.ar",
+      "path": "/",
+      "expires": 1787111720,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "ar_debug",
+      "value": "1",
+      "domain": ".www.google-analytics.com",
+      "path": "/",
+      "expires": 1763351720.478146,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "g",
+      "value": "6On0y3QIU1QL2xHcpZzv_1755575720562",
+      "domain": ".creativecdn.com",
+      "path": "/",
+      "expires": 1787111720.560588,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "c",
+      "value": "6On0y3QIU1QL2xHcpZzv_uBSmHTMIe51S3ztqdTkn_1755575720562",
+      "domain": ".creativecdn.com",
+      "path": "/",
+      "expires": 1787111720.560616,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None",
+      "partitionKey": "https://zonaprop.com.ar",
+      "_crHasCrossSiteAncestor": true
+    },
+    {
+      "name": "ts",
+      "value": "1755575720",
+      "domain": ".creativecdn.com",
+      "path": "/",
+      "expires": 1787111720.560626,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None",
+      "partitionKey": "https://zonaprop.com.ar",
+      "_crHasCrossSiteAncestor": true
+    },
+    {
+      "name": "IDE",
+      "value": "AHWqTUndCXvSEoy8uFTx5osAar-ufR-YLoYPafVIMcPHIvqy4N3_ZCKfG9ek0AVx",
+      "domain": ".doubleclick.net",
+      "path": "/",
+      "expires": 1790135720.675021,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "__cf_bm",
+      "value": "v5xxC16f3Y8U6Gj_S0dxMcXu6mpxLqGKyH.jYNknbFU-1755575720-1.0.1.1-11YfNLwAZOu44.869ejK7d9dsYivHwPWRwsRTGDwneYy.mqCGxsXa.HiD2KsAwnlNsPTXsEM9d67Ibl.7JcBrjwDEBYUwgXO8vws9A_bii4",
+      "domain": ".naventmedia.com",
+      "path": "/",
+      "expires": 1755577520.724996,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "_ga_AAAAAAAAAA",
+      "value": "GS2.1.s1755575720$o1$g0$t1755575721$j59$l0$h1748283466",
+      "domain": ".zonaprop.com.ar",
+      "path": "/",
+      "expires": 1790135721.446068,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "_hjSessionUser_194887",
+      "value": "eyJpZCI6ImY2MmViYzI2LWI4YWUtNWNjYS1hZTRmLWQ2ZDlhYjYwNjRkNyIsImNyZWF0ZWQiOjE3NTU1NzU3MjE2MzgsImV4aXN0aW5nIjpmYWxzZX0=",
+      "domain": ".zonaprop.com.ar",
+      "path": "/",
+      "expires": 1787111721,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "_hjSession_194887",
+      "value": "eyJpZCI6IjEwZWVhODJkLWNkMDMtNDIxYi04YTNiLTNjMTkxM2JhZjIxMiIsImMiOjE3NTU1NzU3MjE2MzgsInMiOjAsInIiOjAsInNiIjowLCJzciI6MCwic2UiOjAsImZzIjoxLCJzcCI6MH0=",
+      "domain": ".zonaprop.com.ar",
+      "path": "/",
+      "expires": 1755577521,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "_fbp",
+      "value": "fb.3.1755575719874.5828569789",
+      "domain": ".server-side-tagging-773543190699.us-central1.run.app",
+      "path": "/",
+      "expires": 1763351721.744242,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "https://www.zonaprop.com.ar",
+      "localStorage": [
+        {
+          "name": "_gcl_ls",
+          "value": "{\"schema\":\"gcl\",\"version\":1,\"gcl_ctr\":{\"value\":{\"value\":0,\"creationTimeMs\":1755575719864},\"expires\":1763351719864}}"
+        },
+        {
+          "name": "__rtbh.lid",
+          "value": "{\"eventType\":\"lid\",\"id\":\"ifDr5y6GZCjet8D002R1\",\"expiryDate\":\"2026-08-19T03:55:20.418Z\"}"
+        },
+        {
+          "name": "goog:cached:topics",
+          "value": "[null,1755575720553,3]"
+        },
+        {
+          "name": "NRBA_SESSION",
+          "value": "{\"value\":\"d7dcc042980633b1\",\"inactiveAt\":1755577522569,\"expiresAt\":1755590121020,\"updatedAt\":1755575722569,\"sessionReplayMode\":0,\"sessionReplaySentFirstChunk\":false,\"sessionTraceMode\":0,\"traceHarvestStarted\":false,\"serverTimeDiff\":-120,\"custom\":{}}"
+        }
+      ]
+    },
+    {
+      "origin": "https://www.google.com",
+      "localStorage": [
+        {
+          "name": "rc::h",
+          "value": "1755575721466"
+        }
+      ]
+    }
+  ]
+}
