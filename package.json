@@ -7,11 +7,12 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "build": "echo 'No build step required'",
+    "build": "mkdir -p data && echo 'Build completed'",
     "load-data": "node scripts/loadToQdrant.js",
     "load-multiple": "node scripts/loadMultipleFiles.js",
     "load-fixed": "node scripts/fixedLoader.js",
     "load-final": "node scripts/finalLoader.js",
+    "load-incremental": "node scripts/incrementalLoader.js",
     "setup": "node scripts/setup.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -26,6 +27,7 @@
   "dependencies": {
     "@qdrant/js-client-rest": "^1.15.1",
     "axios": "^1.6.2",
+    "better-sqlite3": "^9.6.0",
     "body-parser": "^1.20.2",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",

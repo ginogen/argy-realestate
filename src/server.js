@@ -5,7 +5,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { processMessage } from './messageProcessor.js';
 import { sendWhatsAppMessage } from './ultramsgClient.js';
-import { getSession, updateSession, addToConversationHistory, getSessionStats } from './sessionManager.js';
+import { getSession, updateSession, addToConversationHistory, getSessionStats } from './userManager.js';
 import { verifyConnections, initializeDatabase } from '../config/database.js';
 import { getCollectionStats } from './qdrantSearch.js';
 import { sendPropertyImage } from './imageHandler.js';
@@ -236,7 +236,7 @@ async function startServer() {
     process.exit(1);
   }
   
-  // Inicializar base de datos
+  // Inicializar base de datos Qdrant
   console.log('\n🗄️  Inicializando base de datos...');
   await initializeDatabase();
   

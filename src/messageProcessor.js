@@ -3,6 +3,7 @@ import OpenAI from 'openai';
 import { searchProperties } from './qdrantSearch.js';
 import { formatPropertyList, formatPropertyDetails } from './responseFormatter.js';
 import { sendPropertyImage } from './imageHandler.js';
+import { saveUserSearchHistory, learnFromUserBehavior } from './userManager.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -38,6 +39,18 @@ export async function processMessage(message, session) {
       case 'help':
         return handleHelp();
       
+      case 'favorites':
+        return await handleFavorites(session);
+      
+      case 'search_history':
+        return await handleSearchHistory(session);
+      
+      case 'preferences':
+        return await handlePreferences(session);
+      
+      case 'save_property':
+        return await handleSaveProperty(message, session);
+      
       default:
         return await handlePropertySearch(message, session);
     }
@@ -66,6 +79,23 @@ function detectMessageType(message, session) {
   // Ayuda
   if (/ayuda|help|como usar|instrucciones/i.test(lowerMessage)) {
     return 'help';
+  }
+  
+  // Comandos de usuario
+  if (/favoritos|guardadas|mis propiedades|saved/i.test(lowerMessage)) {
+    return 'favorites';
+  }
+  
+  if (/historial|mis búsquedas|búsquedas anteriores|history/i.test(lowerMessage)) {
+    return 'search_history';
+  }
+  
+  if (/preferencias|configuración|config|settings/i.test(lowerMessage)) {
+    return 'preferences';
+  }
+  
+  if (/guardar|favorito|save/i.test(lowerMessage) && /[0-9]/.test(lowerMessage)) {
+    return 'save_property';
   }
   
   // Más resultados
@@ -319,6 +349,19 @@ async function handlePropertySearch(message, session) {
     session.lastFilters = searchIntent.filters;
     session.currentOffset = 0;
     
+    // Guardar búsqueda en historial persistente
+    if (session.user?.whatsapp_number) {
+      saveUserSearchHistory(
+        session.user.whatsapp_number, 
+        searchIntent.query, 
+        searchIntent.filters, 
+        results.properties.length
+      );
+      
+      // Aprender de los filtros de búsqueda
+      learnFromUserBehavior(session.user.whatsapp_number, searchIntent.filters);
+    }
+    
     return {
       text: `${summary}\n\n${formattedList}`,
       properties: results.properties,
@@ -458,4 +501,208 @@ function createSearchSummary(searchIntent, results) {
   }
   
   return summary;
+}
+
+// === NUEVAS FUNCIONES PARA DATOS PERSISTENTES ===
+
+// Manejar comando "favoritos"
+async function handleFavorites(session) {
+  if (!session.user?.whatsapp_number) {
+    return {
+      text: '❌ Error accediendo a tus datos. Intenta de nuevo.',
+      context: session.context
+    };
+  }
+
+  const { getUserFavoritesData } = await import('./userManager.js');
+  const favorites = getUserFavoritesData(session.user.whatsapp_number);
+
+  if (!favorites || favorites.length === 0) {
+    return {
+      text: '📁 No tienes propiedades guardadas como favoritas.\n\n💡 Para guardar una propiedad, escribe "guardar [número]" cuando veas los resultados de búsqueda.',
+      context: session.context
+    };
+  }
+
+  let message = `⭐ *Tus propiedades favoritas:*\n\n`;
+
+  favorites.forEach((fav, index) => {
+    const number = index + 1;
+    message += `${number}️⃣ ${fav.property_title || 'Propiedad'}\n`;
+    if (fav.property_price) {
+      message += `💰 ${fav.property_price}\n`;
+    }
+    message += `📅 Guardada: ${new Date(fav.saved_at).toLocaleDateString('es-AR')}\n\n`;
+  });
+
+  message += `💡 Total: ${favorites.length} propiedad${favorites.length > 1 ? 'es' : ''} guardada${favorites.length > 1 ? 's' : ''}`;
+
+  return {
+    text: message,
+    context: session.context
+  };
+}
+
+// Manejar comando "historial"
+async function handleSearchHistory(session) {
+  if (!session.user?.whatsapp_number) {
+    return {
+      text: '❌ Error accediendo a tu historial. Intenta de nuevo.',
+      context: session.context
+    };
+  }
+
+  const { getUserSearchHistory } = await import('./userManager.js');
+  const history = getUserSearchHistory(session.user.whatsapp_number, 10);
+
+  if (!history || history.length === 0) {
+    return {
+      text: '📋 No tienes búsquedas anteriores.\n\n💡 Realiza algunas búsquedas y aparecerán aquí para que puedas repetirlas fácilmente.',
+      context: session.context
+    };
+  }
+
+  let message = `📋 *Tu historial de búsquedas:*\n\n`;
+
+  history.forEach((search, index) => {
+    const number = index + 1;
+    const date = new Date(search.created_at).toLocaleDateString('es-AR');
+    
+    message += `${number}️⃣ "${search.query}"\n`;
+    message += `📅 ${date} • ${search.results_count} resultado${search.results_count !== 1 ? 's' : ''}\n`;
+    
+    // Mostrar filtros principales
+    if (search.filters) {
+      const filters = [];
+      if (search.filters.propertyType) filters.push(search.filters.propertyType);
+      if (search.filters.bedrooms) filters.push(`${search.filters.bedrooms} dorm.`);
+      if (search.filters.priceMax) filters.push(`hasta $${search.filters.priceMax.toLocaleString('es-AR')}`);
+      if (search.filters.neighborhood) filters.push(search.filters.neighborhood);
+      
+      if (filters.length > 0) {
+        message += `🔍 ${filters.join(', ')}\n`;
+      }
+    }
+    message += `\n`;
+  });
+
+  message += `💡 Para repetir una búsqueda, escribe algo similar a lo que buscaste antes.`;
+
+  return {
+    text: message,
+    context: session.context
+  };
+}
+
+// Manejar comando "preferencias"
+async function handlePreferences(session) {
+  if (!session.user?.whatsapp_number) {
+    return {
+      text: '❌ Error accediendo a tus preferencias. Intenta de nuevo.',
+      context: session.context
+    };
+  }
+
+  const { getUserPreferencesData } = await import('./userManager.js');
+  const preferences = getUserPreferencesData(session.user.whatsapp_number);
+
+  let message = `⚙️ *Tus preferencias guardadas:*\n\n`;
+
+  if (!preferences) {
+    message += `📝 Aún no tienes preferencias guardadas.\n\n`;
+    message += `💡 Las preferencias se aprenden automáticamente de tus búsquedas:\n`;
+    message += `• Tipo de propiedad más buscado\n`;
+    message += `• Precio máximo preferido\n`;
+    message += `• Cantidad de dormitorios usual\n`;
+    message += `• Barrios de interés\n\n`;
+    message += `🔍 Realiza algunas búsquedas y el sistema aprenderá tus gustos.`;
+  } else {
+    if (preferences.property_type) {
+      message += `🏠 Tipo preferido: ${preferences.property_type}\n`;
+    }
+    if (preferences.bedrooms) {
+      message += `🛏️ Dormitorios: ${preferences.bedrooms}\n`;
+    }
+    if (preferences.max_price) {
+      message += `💰 Precio máximo: $${preferences.max_price.toLocaleString('es-AR')}\n`;
+    }
+    if (preferences.neighborhoods) {
+      try {
+        const neighborhoods = JSON.parse(preferences.neighborhoods);
+        if (neighborhoods.length > 0) {
+          message += `📍 Barrios de interés: ${neighborhoods.join(', ')}\n`;
+        }
+      } catch (error) {
+        // Ignorar error de parsing
+      }
+    }
+    
+    message += `\n📅 Última actualización: ${new Date(preferences.updated_at).toLocaleDateString('es-AR')}\n\n`;
+    message += `💡 Estas preferencias se usan para mejorar tus búsquedas automáticamente.`;
+  }
+
+  return {
+    text: message,
+    context: session.context
+  };
+}
+
+// Manejar comando "guardar [número]"
+async function handleSaveProperty(message, session) {
+  if (!session.user?.whatsapp_number) {
+    return {
+      text: '❌ Error guardando propiedad. Intenta de nuevo.',
+      context: session.context
+    };
+  }
+
+  // Extraer número de la propiedad
+  const numberMatch = message.match(/(\d+)/);
+  if (!numberMatch) {
+    return {
+      text: '❌ Por favor especifica el número de la propiedad.\n\n💡 Ejemplo: "guardar 3"',
+      context: session.context
+    };
+  }
+
+  const propertyNumber = parseInt(numberMatch[1]);
+
+  // Verificar que hay resultados previos
+  if (!session.lastResults || session.lastResults.length === 0) {
+    return {
+      text: '❌ No hay propiedades para guardar.\n\n💡 Primero busca propiedades y luego puedes guardar las que te gusten.',
+      context: session.context
+    };
+  }
+
+  // Verificar que el número es válido
+  if (propertyNumber < 1 || propertyNumber > session.lastResults.length) {
+    return {
+      text: `❌ Número inválido. Elige un número entre 1 y ${session.lastResults.length}.`,
+      context: session.context
+    };
+  }
+
+  const property = session.lastResults[propertyNumber - 1];
+
+  // Guardar como favorito
+  const { saveUserFavorite } = await import('./userManager.js');
+  const saved = saveUserFavorite(
+    session.user.whatsapp_number,
+    property.originalId,
+    property.title,
+    property.priceFormatted || `$${property.price?.toLocaleString('es-AR')}`
+  );
+
+  if (saved) {
+    return {
+      text: `⭐ ¡Propiedad guardada como favorita!\n\n🏠 ${property.title || 'Propiedad'}\n💰 ${property.priceFormatted || 'Precio a consultar'}\n\n💡 Escribe "favoritos" para ver todas tus propiedades guardadas.`,
+      context: session.context
+    };
+  } else {
+    return {
+      text: '❌ Error guardando la propiedad. Puede que ya esté en tus favoritos.',
+      context: session.context
+    };
+  }
 }

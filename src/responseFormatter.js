@@ -109,7 +109,6 @@ export function formatPropertyDetails(property) {
   // Fotos
   if (property.photosCount > 0) {
     message += `\n📸 ${property.photosCount} foto${property.photosCount > 1 ? 's' : ''} disponible${property.photosCount > 1 ? 's' : ''}\n`;
-    message += `💡 Se enviar${property.photosCount > 1 ? 'án todas las fotos' : 'á la foto'} automáticamente\n`;
   }
   
   // Score de relevancia (solo en desarrollo)
