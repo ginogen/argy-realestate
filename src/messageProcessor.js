@@ -172,9 +172,9 @@ function detectMessageType(message, session) {
 // Manejar saludo
 function handleGreeting() {
   return {
-    text: `¡Hola! 👋 Soy tu asistente de propiedades en Rosario.
+    text: `¡Hola! 👋 Soy Airi.
 
-🏠 **¿Qué puedo hacer por ti?**
+🏠 **¿Qué tipo de propiedad estas buscando?**
 
 📝 **Comandos principales:**
 • Escribe tu búsqueda (ej: "depto 2 dorm centro")
