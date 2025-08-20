@@ -1198,9 +1198,9 @@ async function handleFeedbackSubmission(message, session) {
   try {
     // Enviar feedback al admin
     const result = await sendFeedbackToAdmin(
-      session.whatsappNumber, 
+      session.user.whatsapp_number, 
       message, 
-      session.firstName
+      session.user.first_name
     );
     
     // Desactivar modo feedback
