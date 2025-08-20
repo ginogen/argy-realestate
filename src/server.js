@@ -43,6 +43,7 @@ app.post('/webhook', async (req, res) => {
       fromMe,
       author,
       chatName,
+      pushName,
       type
     } = data;
     
@@ -69,8 +70,8 @@ app.post('/webhook', async (req, res) => {
     console.log(`   Chat: ${chatName || 'Privado'}`);
     console.log(`   ID: ${messageId}`);
     
-    // Obtener o crear sesión del usuario
-    const session = await getSession(from);
+    // Obtener o crear sesión del usuario (con pushName para nuevos usuarios)
+    const session = await getSession(from, pushName);
     
     // Enviar indicador de "escribiendo"
     await sendWhatsAppMessage(from, '⌨️', { typing: true });

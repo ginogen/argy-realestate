@@ -219,3 +219,54 @@ export async function setWebhook(webhookUrl) {
     throw error;
   }
 }
+
+// Función para notificar nuevo usuario al admin
+export async function notifyNewUser(userNumber, pushName = null, totalUsers = null) {
+  try {
+    const adminNumber = process.env.ADMIN_PHONE_NUMBER;
+    
+    if (!adminNumber) {
+      console.log('⚠️ ADMIN_PHONE_NUMBER no configurado, saltando notificación');
+      return;
+    }
+    
+    // Formatear número del usuario para mostrar
+    const cleanUserNumber = userNumber.replace(/[^0-9]/g, '');
+    const formattedUserNumber = cleanUserNumber.replace(/^549?(.{2})(.{4})(.{4})$/, '+54 $1 $2-$3');
+    
+    // Formatear fecha actual
+    const now = new Date();
+    const formattedDate = now.toLocaleDateString('es-AR', {
+      year: 'numeric',
+      month: '2-digit', 
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+    
+    // Crear mensaje de notificación
+    let message = `🆕 NUEVO USUARIO REGISTRADO\n\n`;
+    message += `👤 Número: ${formattedUserNumber}\n`;
+    message += `📱 Nombre: ${pushName || 'Sin nombre'}\n`;
+    message += `📅 Fecha: ${formattedDate}\n`;
+    
+    if (totalUsers) {
+      message += `🔢 Total usuarios: ${totalUsers}`;
+    }
+    
+    // Enviar notificación al admin
+    const result = await sendWhatsAppMessage(adminNumber, message);
+    
+    if (result.success) {
+      console.log(`✅ Notificación de nuevo usuario enviada al admin: ${adminNumber}`);
+    }
+    
+    return result;
+    
+  } catch (error) {
+    console.error('❌ Error enviando notificación de nuevo usuario:', error.message);
+    // No lanzar error para que no interrumpa el registro del usuario
+    return { success: false, error: error.message };
+  }
+}

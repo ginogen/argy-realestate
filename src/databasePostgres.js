@@ -125,7 +125,7 @@ export async function getOrCreateUser(whatsappNumber, firstName = null) {
         'UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1',
         [result.rows[0].id]
       );
-      return result.rows[0];
+      return { user: result.rows[0], isNewUser: false };
     }
     
     // Crear nuevo usuario
@@ -135,7 +135,22 @@ export async function getOrCreateUser(whatsappNumber, firstName = null) {
     );
     
     console.log(`👤 Nuevo usuario creado: ${cleanNumber}`);
-    return insertResult.rows[0];
+    
+    // Obtener total de usuarios para la notificación
+    const totalUsersResult = await pool.query('SELECT COUNT(*) FROM users');
+    const totalUsers = parseInt(totalUsersResult.rows[0].count);
+    
+    // Importar y llamar función de notificación de forma asíncrona
+    // No esperamos la respuesta para no bloquear el registro del usuario
+    import('./ultramsgClient.js').then(({ notifyNewUser }) => {
+      notifyNewUser(cleanNumber, firstName, totalUsers).catch(err => {
+        console.error('Error en notificación de nuevo usuario:', err);
+      });
+    }).catch(err => {
+      console.error('Error importando ultramsgClient:', err);
+    });
+    
+    return { user: insertResult.rows[0], isNewUser: true };
     
   } catch (error) {
     console.error('❌ Error en getOrCreateUser:', error);
@@ -154,10 +169,26 @@ export async function getUserPreferences(userId) {
     
     const prefs = result.rows[0];
     if (prefs.neighborhoods) {
-      prefs.neighborhoods = JSON.parse(prefs.neighborhoods);
+      // Usar función segura para parsear neighborhoods
+      try {
+        prefs.neighborhoods = JSON.parse(prefs.neighborhoods);
+        // Si no es array, convertirlo
+        if (!Array.isArray(prefs.neighborhoods)) {
+          prefs.neighborhoods = [prefs.neighborhoods];
+        }
+      } catch (error) {
+        // Si no es JSON válido, tratarlo como string simple
+        console.log(`🔧 Convirtiendo neighborhood string a array: "${prefs.neighborhoods}"`);
+        prefs.neighborhoods = [prefs.neighborhoods];
+      }
     }
     if (prefs.features) {
-      prefs.features = JSON.parse(prefs.features);
+      try {
+        prefs.features = JSON.parse(prefs.features);
+      } catch (error) {
+        console.log(`🔧 Error parseando features: "${prefs.features}"`);
+        prefs.features = [];
+      }
     }
     
     return prefs;

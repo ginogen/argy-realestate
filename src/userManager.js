@@ -49,16 +49,22 @@ export async function getOrCreateUserSession(whatsappNumber, firstName = null) {
   
   try {
     // 1. Obtener/crear usuario en BD persistente
-    const user = await getOrCreateUser(cleanNumber, firstName);
-    if (!user) {
+    const result = await getOrCreateUser(cleanNumber, firstName);
+    if (!result || !result.user) {
       throw new Error('Error creando usuario en BD');
     }
+    
+    const user = result.user;
+    const isNewUser = result.isNewUser;
     
     // 2. Verificar sesión en memoria
     let session = sessions.get(cleanNumber);
     
     if (!session) {
-      console.log(`👤 Nueva sesión creada para usuario: ${cleanNumber} (DB ID: ${user.id})`);
+      const logMessage = isNewUser 
+        ? `🆕 Nueva sesión para NUEVO USUARIO: ${cleanNumber} (DB ID: ${user.id})`
+        : `👤 Nueva sesión creada para usuario: ${cleanNumber} (DB ID: ${user.id})`;
+      console.log(logMessage);
       session = createSession(user);
       sessions.set(cleanNumber, session);
     } else {
@@ -179,8 +185,8 @@ export async function removeUserFavorite(whatsappNumber, propertyId) {
 // === FUNCIONES DE COMPATIBILIDAD (manteniendo las originales) ===
 
 // Obtener sesión (compatible con código anterior)
-export async function getSession(whatsappNumber) {
-  const session = await getOrCreateUserSession(whatsappNumber);
+export async function getSession(whatsappNumber, pushName = null) {
+  const session = await getOrCreateUserSession(whatsappNumber, pushName);
   
   if (!session) {
     // Fallback session si hay error en BD
@@ -269,6 +275,28 @@ export async function getContextForAI(whatsappNumber) {
   };
 }
 
+// Función segura para parsear neighborhoods que maneja tanto strings como arrays JSON
+function safeParseNeighborhoods(neighborhoodsData) {
+  if (!neighborhoodsData) return [];
+  
+  // Si ya es un array, devolverlo
+  if (Array.isArray(neighborhoodsData)) return neighborhoodsData;
+  
+  // Si es un string, intentar parsearlo como JSON
+  if (typeof neighborhoodsData === 'string') {
+    try {
+      const parsed = JSON.parse(neighborhoodsData);
+      return Array.isArray(parsed) ? parsed : [parsed];
+    } catch (error) {
+      // Si no es JSON válido, tratarlo como string simple
+      console.log(`🔧 Convirtiendo neighborhood string a array: "${neighborhoodsData}"`);
+      return [neighborhoodsData];
+    }
+  }
+  
+  return [];
+}
+
 // Aprender de comportamiento (guardar preferencias automáticamente)
 export async function learnFromUserBehavior(whatsappNumber, searchFilters, selectedProperties = []) {
   const session = sessions.get(whatsappNumber.replace(/[^0-9]/g, ''));
@@ -302,9 +330,9 @@ export async function learnFromUserBehavior(whatsappNumber, searchFilters, selec
     }
   }
   
-  // Aprender barrios (array JSON)
+  // Aprender barrios (array JSON) - usando función segura
   if (searchFilters.neighborhood) {
-    const neighborhoods = preferences.neighborhoods ? JSON.parse(preferences.neighborhoods) : [];
+    const neighborhoods = safeParseNeighborhoods(preferences.neighborhoods);
     if (!neighborhoods.includes(searchFilters.neighborhood)) {
       neighborhoods.push(searchFilters.neighborhood);
       // Mantener solo 5 barrios

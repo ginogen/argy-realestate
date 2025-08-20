@@ -252,12 +252,27 @@ export function getUserPreferences(userId) {
     `).get(userId);
     
     if (prefs) {
-      // Parsear JSON fields
+      // Parsear JSON fields de forma segura
       if (prefs.neighborhoods) {
-        prefs.neighborhoods = JSON.parse(prefs.neighborhoods);
+        try {
+          prefs.neighborhoods = JSON.parse(prefs.neighborhoods);
+          // Si no es array, convertirlo
+          if (!Array.isArray(prefs.neighborhoods)) {
+            prefs.neighborhoods = [prefs.neighborhoods];
+          }
+        } catch (error) {
+          // Si no es JSON válido, tratarlo como string simple
+          console.log(`🔧 Convirtiendo neighborhood string a array: "${prefs.neighborhoods}"`);
+          prefs.neighborhoods = [prefs.neighborhoods];
+        }
       }
       if (prefs.features) {
-        prefs.features = JSON.parse(prefs.features);
+        try {
+          prefs.features = JSON.parse(prefs.features);
+        } catch (error) {
+          console.log(`🔧 Error parseando features: "${prefs.features}"`);
+          prefs.features = [];
+        }
       }
     }
     

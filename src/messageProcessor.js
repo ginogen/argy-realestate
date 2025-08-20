@@ -8,6 +8,28 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// Función segura para parsear neighborhoods que maneja tanto strings como arrays JSON
+function safeParseNeighborhoods(neighborhoodsData) {
+  if (!neighborhoodsData) return [];
+  
+  // Si ya es un array, devolverlo
+  if (Array.isArray(neighborhoodsData)) return neighborhoodsData;
+  
+  // Si es un string, intentar parsearlo como JSON
+  if (typeof neighborhoodsData === 'string') {
+    try {
+      const parsed = JSON.parse(neighborhoodsData);
+      return Array.isArray(parsed) ? parsed : [parsed];
+    } catch (error) {
+      // Si no es JSON válido, tratarlo como string simple
+      console.log(`🔧 Convirtiendo neighborhood string a array: "${neighborhoodsData}"`);
+      return [neighborhoodsData];
+    }
+  }
+  
+  return [];
+}
+
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
@@ -722,13 +744,9 @@ async function handlePreferences(session) {
       message += `💰 Precio máximo: $${preferences.max_price.toLocaleString('es-AR')}\n`;
     }
     if (preferences.neighborhoods) {
-      try {
-        const neighborhoods = JSON.parse(preferences.neighborhoods);
-        if (neighborhoods.length > 0) {
-          message += `📍 Barrios de interés: ${neighborhoods.join(', ')}\n`;
-        }
-      } catch (error) {
-        // Ignorar error de parsing
+      const neighborhoods = safeParseNeighborhoods(preferences.neighborhoods);
+      if (neighborhoods.length > 0) {
+        message += `📍 Barrios de interés: ${neighborhoods.join(', ')}\n`;
       }
     }
     
@@ -853,14 +871,10 @@ async function handleRecommendedSearch(session) {
   }
 
   if (preferences.neighborhoods) {
-    try {
-      const neighborhoods = JSON.parse(preferences.neighborhoods);
-      if (neighborhoods.length > 0) {
-        filters.neighborhood = neighborhoods[0]; // Usar el primer barrio preferido
-        searchQuery += ` en ${neighborhoods[0]}`;
-      }
-    } catch (error) {
-      // Ignorar error de parsing
+    const neighborhoods = safeParseNeighborhoods(preferences.neighborhoods);
+    if (neighborhoods.length > 0) {
+      filters.neighborhood = neighborhoods[0]; // Usar el primer barrio preferido
+      searchQuery += ` en ${neighborhoods[0]}`;
     }
   }
 
