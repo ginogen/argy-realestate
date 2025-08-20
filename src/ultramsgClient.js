@@ -270,3 +270,51 @@ export async function notifyNewUser(userNumber, pushName = null, totalUsers = nu
     return { success: false, error: error.message };
   }
 }
+
+// Función para enviar feedback/sugerencias al admin
+export async function sendFeedbackToAdmin(userNumber, feedback, pushName = null) {
+  try {
+    const adminNumber = process.env.ADMIN_PHONE_NUMBER;
+    
+    if (!adminNumber) {
+      console.log('⚠️ ADMIN_PHONE_NUMBER no configurado, no se puede enviar feedback');
+      return { success: false, error: 'ADMIN_PHONE_NUMBER not configured' };
+    }
+    
+    // Formatear número del usuario para mostrar
+    const cleanUserNumber = userNumber.replace(/[^0-9]/g, '');
+    const formattedUserNumber = cleanUserNumber.replace(/^549?(.{2})(.{4})(.{4})$/, '+54 $1 $2-$3');
+    
+    // Formatear fecha actual
+    const now = new Date();
+    const formattedDate = now.toLocaleDateString('es-AR', {
+      year: 'numeric',
+      month: '2-digit', 
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+    
+    // Crear mensaje de feedback
+    let message = `💬 FEEDBACK/SUGERENCIA\n\n`;
+    message += `👤 Usuario: ${formattedUserNumber}\n`;
+    message += `📱 Nombre: ${pushName || 'Sin nombre'}\n`;
+    message += `📅 Fecha: ${formattedDate}\n\n`;
+    message += `💭 Mensaje:\n"${feedback}"\n\n`;
+    message += `🔗 Responder: https://wa.me/${cleanUserNumber}`;
+    
+    // Enviar feedback al admin
+    const result = await sendWhatsAppMessage(adminNumber, message);
+    
+    if (result.success) {
+      console.log(`✅ Feedback enviado al admin desde usuario: ${formattedUserNumber}`);
+    }
+    
+    return result;
+    
+  } catch (error) {
+    console.error('❌ Error enviando feedback al admin:', error.message);
+    return { success: false, error: error.message };
+  }
+}

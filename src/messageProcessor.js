@@ -4,6 +4,7 @@ import { searchProperties } from './qdrantSearch.js';
 import { formatPropertyList, formatPropertyDetails, formatErrorMessage, createErrorContext } from './responseFormatter.js';
 import { sendPropertyImage } from './imageHandler.js';
 import { saveUserSearchHistory, learnFromUserBehavior } from './userManager.js';
+import { sendFeedbackToAdmin } from './ultramsgClient.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -102,6 +103,11 @@ export async function processMessage(message, session) {
   try {
     console.log(`🤖 Procesando mensaje: "${message}"`);
     
+    // Verificar si el usuario está esperando enviar feedback
+    if (session.context.waitingForFeedback) {
+      return await handleFeedbackSubmission(message, session);
+    }
+    
     // Detectar tipo de mensaje
     const messageType = detectMessageType(message, session);
     
@@ -141,6 +147,9 @@ export async function processMessage(message, session) {
       
       case 'full_description':
         return await handleFullDescription(session);
+      
+      case 'feedback_request':
+        return await handleFeedbackRequest(session);
       
       default:
         return await handlePropertySearch(message, session);
@@ -213,6 +222,14 @@ function detectMessageType(message, session) {
     return 'recommended_search';
   }
   debugChecks.push('recommended: no match');
+
+  // Sugerencias y feedback
+  if (/sugerencias|feedback|mejoras|reportar|contacto|problema|bug|error|falla/i.test(lowerMessage)) {
+    debugChecks.push('feedback: MATCH');
+    console.log(`🎯 Tipo detectado: feedback_request`);
+    return 'feedback_request';
+  }
+  debugChecks.push('feedback: no match');
   
   if (/guardar|favorito|save/i.test(lowerMessage) && /[0-9]/.test(lowerMessage)) {
     debugChecks.push('save_property: MATCH');
@@ -323,6 +340,9 @@ function handleHelp() {
 • \`hola\` - Volver al inicio  
 • \`ayuda\` o \`menú\` - Ver este menú
 • Nueva búsqueda - Escribir lo que buscas
+
+💬 **FEEDBACK:**
+• \`feedback\` o \`sugerencias\` - Enviar ideas y reportes
 
 🏠 **EJEMPLOS DE BÚSQUEDA:**
 • "Departamento 2 dormitorios Centro hasta 400 mil"
@@ -1142,6 +1162,103 @@ async function handleFullDescription(session) {
     text: message,
     context: session.context
   };
+}
+
+// Manejar solicitud de feedback/sugerencias
+async function handleFeedbackRequest(session) {
+  console.log(`📝 Usuario solicita enviar feedback`);
+  
+  // Activar modo esperando feedback
+  session.context.waitingForFeedback = true;
+  
+  return {
+    text: `📝 **¡Nos encanta recibir feedback!**
+
+Escribe tu sugerencia, reporte de problema o idea de mejora. Puede ser sobre:
+
+🔧 **Funcionalidades:** Nuevas características que te gustaría ver
+🐛 **Reportes:** Errores o problemas que encuentres  
+💡 **Mejoras:** Ideas para mejorar la experiencia
+📱 **Usabilidad:** Cambios en la interfaz o navegación
+
+💬 _Tu mensaje será enviado directamente al equipo de desarrollo._
+
+**Escribe tu feedback ahora:**`,
+    context: {
+      ...session.context,
+      waitingForFeedback: true
+    }
+  };
+}
+
+// Manejar envío de feedback del usuario
+async function handleFeedbackSubmission(message, session) {
+  console.log(`📤 Enviando feedback del usuario: "${message}"`);
+  
+  try {
+    // Enviar feedback al admin
+    const result = await sendFeedbackToAdmin(
+      session.whatsappNumber, 
+      message, 
+      session.firstName
+    );
+    
+    // Desactivar modo feedback
+    session.context.waitingForFeedback = false;
+    
+    if (result.success) {
+      return {
+        text: `✅ **¡Feedback enviado exitosamente!**
+
+Gracias por tomarte el tiempo de escribirnos. Tu mensaje ha sido enviado al equipo de desarrollo y será revisado pronto.
+
+🔄 ¿En qué más puedo ayudarte? Puedes:
+• Buscar propiedades escribiendo lo que necesitas
+• Ver tu historial con "historial"
+• Explorar tus favoritos con "favoritos"
+• Escribir "ayuda" para ver todas las opciones`,
+        context: {
+          ...session.context,
+          waitingForFeedback: false
+        }
+      };
+    } else {
+      return {
+        text: `❌ **Hubo un problema enviando tu feedback**
+
+Disculpa, no pude enviar tu mensaje en este momento. Por favor, inténtalo de nuevo más tarde.
+
+🔄 ¿Te gustaría intentar de nuevo o hacer algo más?
+• Reintentar: escribe "feedback" otra vez
+• Buscar propiedades: describe lo que buscas
+• Ayuda: escribe "ayuda"`,
+        context: {
+          ...session.context,
+          waitingForFeedback: false
+        }
+      };
+    }
+    
+  } catch (error) {
+    console.error('❌ Error enviando feedback:', error);
+    
+    // Desactivar modo feedback en caso de error
+    session.context.waitingForFeedback = false;
+    
+    return {
+      text: `❌ **Error enviando feedback**
+
+Disculpa, ocurrió un error inesperado. Por favor, inténtalo más tarde.
+
+🔄 ¿Qué te gustaría hacer?
+• Buscar propiedades escribiendo tu consulta
+• Ver opciones con "ayuda"`,
+      context: {
+        ...session.context,
+        waitingForFeedback: false
+      }
+    };
+  }
 }
 
 // Función auxiliar para obtener emoji según tipo de propiedad
