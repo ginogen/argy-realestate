@@ -504,6 +504,15 @@ async function handleMoreResults(session) {
       };
     }
     
+    // Actualizar el tracking de búsqueda actual con las nuevas propiedades
+    const currentSearchId = session.context.currentSearchId;
+    if (currentSearchId && session.context.searchResults && session.context.searchResults[currentSearchId]) {
+      // Agregar las nuevas propiedades al tracking existente
+      session.context.searchResults[currentSearchId].properties.push(...results.properties);
+      console.log(`🔄 Agregadas ${results.properties.length} propiedades al tracking de búsqueda ${currentSearchId}`);
+      console.log(`📊 Total propiedades en tracking: ${session.context.searchResults[currentSearchId].properties.length}`);
+    }
+
     return {
       text: formatPropertyList(results.properties, `📄 Más resultados (${offset + 1}-${offset + results.properties.length}):`, results.total, results.hasMore),
       properties: results.properties,
