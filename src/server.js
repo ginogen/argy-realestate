@@ -104,6 +104,32 @@ app.post('/webhook', async (req, res) => {
         await sendWhatsAppMessage(from, '❌ No pude enviar la foto de esta propiedad.');
       }
     }
+
+    // Si necesita reenviar listado actualizado con checkmarks
+    if (response.resendList && response.listProperties && response.viewedIndices) {
+      console.log(`🔄 Reenviando listado actualizado con ${response.viewedIndices.length} propiedades vistas`);
+      
+      // Esperar un poco antes de reenviar el listado
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      try {
+        // Importar la función para generar el listado actualizado
+        const { formatPropertyList } = await import('./responseFormatter.js');
+        const updatedList = formatPropertyList(
+          response.listProperties, 
+          '🔄 *Lista actualizada:*', 
+          null, 
+          false, 
+          response.viewedIndices
+        );
+        
+        await sendWhatsAppMessage(from, updatedList);
+        console.log(`✅ Listado actualizado enviado exitosamente`);
+      } catch (listError) {
+        console.error('❌ Error enviando listado actualizado:', listError);
+        // No enviamos mensaje de error al usuario para esto, no es crítico
+      }
+    }
     
     // Si hay propiedades, enviar también los detalles
     if (response.properties && response.properties.length > 0) {

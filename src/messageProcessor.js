@@ -1,7 +1,7 @@
 // messageProcessor.js - Procesador de mensajes con GPT-4 y búsqueda en Qdrant
 import OpenAI from 'openai';
 import { searchProperties } from './qdrantSearch.js';
-import { formatPropertyList, formatPropertyDetails } from './responseFormatter.js';
+import { formatPropertyList, formatPropertyDetails, formatErrorMessage, createErrorContext } from './responseFormatter.js';
 import { sendPropertyImage } from './imageHandler.js';
 import { saveUserSearchHistory, learnFromUserBehavior } from './userManager.js';
 import dotenv from 'dotenv';
@@ -33,6 +33,69 @@ function safeParseNeighborhoods(neighborhoodsData) {
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
+
+// Funciones auxiliares para tracking de propiedades vistas por búsqueda
+function generateSearchId(query, filters) {
+  const searchData = JSON.stringify({ query, filters });
+  const timestamp = Date.now();
+  // Crear un hash simple del query para identificar búsquedas similares
+  const hash = searchData.split('').reduce((a, b) => {
+    a = ((a << 5) - a + b.charCodeAt(0)) & 0xffffffff;
+    return a < 0 ? a + 0x100000000 : a;
+  }, 0);
+  return `search_${timestamp}_${hash}`;
+}
+
+function initializeSearchTracking(session, searchId, query, filters, properties) {
+  if (!session.context.searchResults) {
+    session.context.searchResults = {};
+  }
+  
+  session.context.currentSearchId = searchId;
+  session.context.searchResults[searchId] = {
+    query,
+    filters,
+    properties,
+    viewedIndices: [],
+    timestamp: Date.now()
+  };
+  
+  // Limpiar búsquedas antigas (mantener solo las últimas 3)
+  const searches = Object.keys(session.context.searchResults);
+  if (searches.length > 3) {
+    const sortedSearches = searches.sort((a, b) => 
+      session.context.searchResults[b].timestamp - session.context.searchResults[a].timestamp
+    );
+    sortedSearches.slice(3).forEach(oldSearchId => {
+      delete session.context.searchResults[oldSearchId];
+    });
+  }
+}
+
+function markPropertyAsViewed(session, propertyIndex) {
+  if (!session.context.currentSearchId || !session.context.searchResults) return false;
+  
+  const currentSearch = session.context.searchResults[session.context.currentSearchId];
+  if (!currentSearch) return false;
+  
+  if (!currentSearch.viewedIndices.includes(propertyIndex)) {
+    currentSearch.viewedIndices.push(propertyIndex);
+    return true;
+  }
+  return false;
+}
+
+function getCurrentSearchProperties(session) {
+  if (!session.context.currentSearchId || !session.context.searchResults) return null;
+  
+  const currentSearch = session.context.searchResults[session.context.currentSearchId];
+  return currentSearch || null;
+}
+
+function generateUpdatedPropertyList(properties, viewedIndices, searchQuery) {
+  const title = `🔄 *Lista actualizada:*`;
+  return formatPropertyList(properties, title, null, false, viewedIndices);
+}
 
 // Función principal para procesar mensajes
 export async function processMessage(message, session) {
@@ -76,14 +139,20 @@ export async function processMessage(message, session) {
       case 'recommended_search':
         return await handleRecommendedSearch(session);
       
+      case 'full_description':
+        return await handleFullDescription(session);
+      
       default:
         return await handlePropertySearch(message, session);
     }
     
   } catch (error) {
     console.error('❌ Error procesando mensaje:', error);
+    
+    const errorContext = createErrorContext(message, session, 'service_error');
+    
     return {
-      text: '❌ Lo siento, ocurrió un error procesando tu consulta. Por favor, intenta de nuevo.',
+      text: formatErrorMessage('service_error', errorContext),
       context: session.context
     };
   }
@@ -167,6 +236,14 @@ function detectMessageType(message, session) {
     return 'photo_request';
   }
   debugChecks.push('photo_request: no match');
+
+  // Descripción completa
+  if (/descripci[oó]n\s*(completa|full|entera|total)/i.test(lowerMessage)) {
+    debugChecks.push('full_description: MATCH');
+    console.log(`🎯 Tipo detectado: full_description`);
+    return 'full_description';
+  }
+  debugChecks.push('full_description: no match');
   
   // Número de propiedad (1-20) - PRIORIDAD ALTA si hay resultados previos
   if (/^([1-9]|1[0-9]|20)$/.test(lowerMessage)) {
@@ -266,23 +343,38 @@ function handleHelp() {
 // Manejar detalles de propiedad específica
 async function handlePropertyDetail(message, session) {
   const propertyIndex = parseInt(message) - 1;
-  const properties = session.lastResults || [];
+  
+  // Obtener propiedades de la búsqueda actual usando el nuevo sistema de tracking
+  const currentSearch = getCurrentSearchProperties(session);
+  
+  if (!currentSearch) {
+    const errorContext = createErrorContext(message, session, 'no_previous_search');
+    return {
+      text: formatErrorMessage('no_previous_search', errorContext),
+      context: session.context
+    };
+  }
+  
+  const properties = currentSearch.properties;
   
   console.log(`🔍 Solicitando detalles de propiedad #${message}, índice: ${propertyIndex}`);
-  console.log(`📋 Propiedades disponibles: ${properties.length}`);
+  console.log(`📋 Propiedades disponibles en búsqueda actual: ${properties.length}`);
+  console.log(`🔍 Search ID: ${session.context.currentSearchId}`);
   
   if (propertyIndex < 0 || propertyIndex >= properties.length) {
+    const errorContext = createErrorContext(message, session, 'invalid_number', { max: properties.length });
+    
     return {
-      text: `❌ Número inválido. Elige un número del 1 al ${properties.length}.
-      
-🔍 Para ver detalles de una propiedad:
-• Primero busca propiedades 
-• Luego escribe el número (1-${Math.min(20, properties.length)})`,
+      text: formatErrorMessage('invalid_number', errorContext),
       context: session.context
     };
   }
   
   const property = properties[propertyIndex];
+  
+  // Marcar esta propiedad como vista en el tracking actual
+  markPropertyAsViewed(session, propertyIndex);
+  console.log(`✅ Propiedad #${message} marcada como vista`);
   
   console.log(`✅ Mostrando detalles de: ${property.title || property.propertyType}`);
   console.log(`📸 Propiedad tiene ${property.photos?.length || 0} fotos`);
@@ -295,9 +387,13 @@ async function handlePropertyDetail(message, session) {
     text: formatPropertyDetails(property),
     sendImage: shouldSendImage, // Flag para enviar imagen
     property: property, // Para enviar imagen después
+    resendList: true, // Flag para reenviar listado actualizado
+    listProperties: properties, // Propiedades del listado actual
+    viewedIndices: currentSearch.viewedIndices, // Índices de propiedades vistas
     context: {
       ...session.context,
-      lastSelectedProperty: property
+      lastSelectedProperty: property,
+      lastViewedPropertyIndex: propertyIndex
     }
   };
 }
@@ -323,8 +419,10 @@ async function handlePhotoRequest(message, session) {
           context: session.context
         };
       } else {
+        const errorContext = createErrorContext(`foto ${numberMatch[1]}`, session, 'no_photos');
+        
         return {
-          text: `❌ La propiedad "${property.title}" no tiene fotos disponibles.`,
+          text: formatErrorMessage('no_photos', errorContext),
           context: session.context
         };
       }
@@ -343,8 +441,10 @@ async function handlePhotoRequest(message, session) {
         context: session.context
       };
     } else {
+      const errorContext = createErrorContext('foto', session, 'no_photos');
+      
       return {
-        text: `❌ Esta propiedad no tiene fotos disponibles.`,
+        text: formatErrorMessage('no_photos', errorContext),
         context: session.context
       };
     }
@@ -359,8 +459,10 @@ async function handlePhotoRequest(message, session) {
 // Manejar "ver más resultados"
 async function handleMoreResults(session) {
   if (!session.lastQuery) {
+    const errorContext = createErrorContext('más resultados', session, 'no_previous_search');
+    
     return {
-      text: '❌ No hay búsqueda previa. Por favor, realiza una nueva consulta.',
+      text: formatErrorMessage('no_previous_search', errorContext),
       context: session.context
     };
   }
@@ -394,8 +496,11 @@ async function handleMoreResults(session) {
     
   } catch (error) {
     console.error('Error obteniendo más resultados:', error);
+    
+    const errorContext = createErrorContext('más resultados', session, 'search_error');
+    
     return {
-      text: '❌ Error obteniendo más resultados. Intenta de nuevo.',
+      text: formatErrorMessage('search_error', errorContext),
       context: session.context
     };
   }
@@ -415,22 +520,23 @@ async function handlePropertySearch(message, session) {
     );
     
     if (results.properties.length === 0) {
+      const errorContext = createErrorContext(message, session, 'no_results');
+      
       return {
-        text: `🔍 No encontré propiedades que coincidan con: "${message}"
-
-💡 *Sugerencias:*
-• Prueba con criterios más amplios
-• Verifica la zona solicitada
-• Ajusta el rango de precios
-
-¿Quieres buscar algo diferente?`,
+        text: formatErrorMessage('no_results', errorContext),
         context: {
           ...session.context,
           lastQuery: searchIntent.query,
-          lastFilters: searchIntent.filters
+          lastFilters: searchIntent.filters,
+          lastResults: [],
+          currentOffset: 0
         }
       };
     }
+
+    // Generar ID único para esta búsqueda e inicializar tracking
+    const searchId = generateSearchId(searchIntent.query, searchIntent.filters);
+    initializeSearchTracking(session, searchId, searchIntent.query, searchIntent.filters, results.properties);
     
     // Crear mensaje de resumen
     const summary = createSearchSummary(searchIntent, results);
@@ -469,8 +575,11 @@ async function handlePropertySearch(message, session) {
     
   } catch (error) {
     console.error('Error en búsqueda:', error);
+    
+    const errorContext = createErrorContext(message, session, 'search_error');
+    
     return {
-      text: '❌ Error realizando la búsqueda. Por favor, intenta de nuevo.',
+      text: formatErrorMessage('search_error', errorContext),
       context: session.context
     };
   }
@@ -601,8 +710,10 @@ function createSearchSummary(searchIntent, results) {
 // Manejar comando "favoritos"
 async function handleFavorites(session) {
   if (!session.user?.whatsapp_number) {
+    const errorContext = createErrorContext('favoritos', session, 'data_access_error');
+    
     return {
-      text: '❌ Error accediendo a tus datos. Intenta de nuevo.',
+      text: formatErrorMessage('data_access_error', errorContext),
       context: session.context
     };
   }
@@ -652,8 +763,10 @@ async function handleFavorites(session) {
 // Manejar comando "historial"
 async function handleSearchHistory(session) {
   if (!session.user?.whatsapp_number) {
+    const errorContext = createErrorContext('historial', session, 'data_access_error');
+    
     return {
-      text: '❌ Error accediendo a tu historial. Intenta de nuevo.',
+      text: formatErrorMessage('data_access_error', errorContext),
       context: session.context
     };
   }
@@ -714,8 +827,10 @@ async function handleSearchHistory(session) {
 // Manejar comando "preferencias"
 async function handlePreferences(session) {
   if (!session.user?.whatsapp_number) {
+    const errorContext = createErrorContext('preferencias', session, 'data_access_error');
+    
     return {
-      text: '❌ Error accediendo a tus preferencias. Intenta de nuevo.',
+      text: formatErrorMessage('data_access_error', errorContext),
       context: session.context
     };
   }
@@ -768,8 +883,10 @@ async function handlePreferences(session) {
 // Manejar comando "guardar [número]"
 async function handleSaveProperty(message, session) {
   if (!session.user?.whatsapp_number) {
+    const errorContext = createErrorContext('guardar propiedad', session, 'data_access_error');
+    
     return {
-      text: '❌ Error guardando propiedad. Intenta de nuevo.',
+      text: formatErrorMessage('data_access_error', errorContext),
       context: session.context
     };
   }
@@ -777,8 +894,10 @@ async function handleSaveProperty(message, session) {
   // Extraer número de la propiedad
   const numberMatch = message.match(/(\d+)/);
   if (!numberMatch) {
+    const errorContext = createErrorContext(message, session, 'invalid_input');
+    
     return {
-      text: '❌ Por favor especifica el número de la propiedad.\n\n💡 Ejemplo: "guardar 3"',
+      text: `🤔 Por favor especifica el número de la propiedad.\n\n💡 Ejemplo: "guardar 3"`,
       context: session.context
     };
   }
@@ -787,16 +906,20 @@ async function handleSaveProperty(message, session) {
 
   // Verificar que hay resultados previos
   if (!session.lastResults || session.lastResults.length === 0) {
+    const errorContext = createErrorContext('guardar', session, 'no_previous_search');
+    
     return {
-      text: '❌ No hay propiedades para guardar.\n\n💡 Primero busca propiedades y luego puedes guardar las que te gusten.',
+      text: formatErrorMessage('no_previous_search', errorContext),
       context: session.context
     };
   }
 
   // Verificar que el número es válido
   if (propertyNumber < 1 || propertyNumber > session.lastResults.length) {
+    const errorContext = createErrorContext(message, session, 'invalid_number', { max: session.lastResults.length });
+    
     return {
-      text: `❌ Número inválido. Elige un número entre 1 y ${session.lastResults.length}.`,
+      text: formatErrorMessage('invalid_number', errorContext),
       context: session.context
     };
   }
@@ -828,8 +951,10 @@ async function handleSaveProperty(message, session) {
 // Manejar búsqueda recomendada basada en preferencias
 async function handleRecommendedSearch(session) {
   if (!session.user?.whatsapp_number) {
+    const errorContext = createErrorContext('búsqueda recomendada', session, 'data_access_error');
+    
     return {
-      text: '❌ Error accediendo a tus preferencias.',
+      text: formatErrorMessage('data_access_error', errorContext),
       context: session.context
     };
   }
@@ -929,9 +1054,108 @@ ${preferences.max_price ? `• Precio máximo: $${preferences.max_price.toLocale
 
   } catch (error) {
     console.error('Error en búsqueda recomendada:', error);
+    
+    const errorContext = createErrorContext('búsqueda recomendada', session, 'search_error');
+    
     return {
-      text: '❌ Error realizando búsqueda recomendada. Por favor, intenta de nuevo.',
+      text: formatErrorMessage('search_error', errorContext),
       context: session.context
     };
   }
+}
+
+// Manejar comando "descripción completa"
+async function handleFullDescription(session) {
+  // Verificar que hay resultados previos
+  if (!session.lastResults || session.lastResults.length === 0) {
+    const errorContext = createErrorContext('descripción completa', session, 'no_previous_search');
+    
+    return {
+      text: formatErrorMessage('no_previous_search', errorContext),
+      context: session.context
+    };
+  }
+
+  // Determinar qué propiedad mostrar
+  let property;
+  
+  // Si hay contexto de última propiedad vista, usar esa
+  if (session.context?.lastSelectedProperty) {
+    property = session.context.lastSelectedProperty;
+  } else if (session.context?.lastViewedPropertyIndex !== undefined) {
+    property = session.lastResults[session.context.lastViewedPropertyIndex];
+  } else {
+    // Por defecto, la primera de los resultados
+    property = session.lastResults[0];
+  }
+  
+  if (!property) {
+    const errorContext = createErrorContext('descripción completa', session, 'service_error');
+    
+    return {
+      text: formatErrorMessage('service_error', errorContext),
+      context: session.context
+    };
+  }
+
+  // Obtener descripción completa
+  const rawDesc = property.descriptionNormalized || property.description;
+  
+  if (!rawDesc) {
+    const errorContext = createErrorContext('descripción completa', session, 'no_photos'); // Reutilizamos el tipo para "no disponible"
+    
+    return {
+      text: `😕 Esta propiedad no tiene descripción disponible.\n\n¿Te muestro los detalles básicos o prefieres ver otra propiedad?`,
+      context: session.context
+    };
+  }
+
+  // Importar función de sanitizado
+  const { sanitizeHtml } = await import('./responseFormatter.js');
+  const cleanDesc = sanitizeHtml(rawDesc);
+  
+  const emoji = getPropertyEmoji(property.propertyType);
+  const title = property.title && property.title !== 'Sin título' ? 
+    property.title : 
+    `${property.propertyType || 'Propiedad'} ${property.bedrooms ? property.bedrooms + ' dorm.' : ''}`;
+
+  let message = `${emoji} *${title}*\n\n📝 *Descripción Completa:*\n\n${cleanDesc}`;
+  
+  // Si la descripción es muy larga, dividir en mensajes
+  if (message.length > 4000) {
+    const firstPart = message.substring(0, 3800);
+    const secondPart = message.substring(3800);
+    
+    return [
+      {
+        text: firstPart + '\n\n_[Continúa...]_',
+        context: session.context
+      },
+      {
+        text: `_[...Continuación]_\n\n${secondPart}`,
+        context: session.context
+      }
+    ];
+  }
+
+  return {
+    text: message,
+    context: session.context
+  };
+}
+
+// Función auxiliar para obtener emoji según tipo de propiedad
+function getPropertyEmoji(propertyType) {
+  const emojiMap = {
+    'Departamento': '🏢',
+    'Casa': '🏠',
+    'PH': '🏘️',
+    'Terreno': '🏞️',
+    'Oficina': '🏢',
+    'Local': '🏪',
+    'Depósito': '🏭',
+    'Cochera': '🚗'
+  };
+  
+  return emojiMap[propertyType] || '🏠';
 }

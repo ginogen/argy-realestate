@@ -2,8 +2,52 @@
 import { sendWhatsAppLocation } from './ultramsgClient.js';
 import { shortenUrl } from './urlShortener.js';
 
+// Función para limpiar HTML y formatear texto
+export function sanitizeHtml(text) {
+  if (!text) return '';
+  
+  let cleanText = text
+    // Remover todas las etiquetas HTML
+    .replace(/<[^>]*>/g, '')
+    // Convertir entidades HTML comunes
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    // Agregar saltos de línea después de puntos seguidos de mayúscula
+    .replace(/\.\s*([A-Z])/g, '.\n$1')
+    // Agregar saltos de línea después de guiones para listas
+    .replace(/\s*-\s*/g, '\n• ')
+    // Limpiar espacios múltiples
+    .replace(/\s+/g, ' ')
+    // Limpiar saltos de línea múltiples
+    .replace(/\n\s*\n\s*\n/g, '\n\n')
+    .replace(/\n\s*\n/g, '\n')
+    .trim();
+  
+  return cleanText;
+}
+
+// Función para truncar texto de forma inteligente (por palabras)
+function smartTruncate(text, maxLength = 1200) {
+  if (!text || text.length <= maxLength) return text;
+  
+  // Buscar el último espacio antes del límite
+  let truncated = text.substring(0, maxLength);
+  const lastSpace = truncated.lastIndexOf(' ');
+  
+  if (lastSpace > maxLength * 0.8) { // Si el último espacio no está muy lejos
+    truncated = truncated.substring(0, lastSpace);
+  }
+  
+  return truncated + '...';
+}
+
 // Formatear lista de propiedades
-export function formatPropertyList(properties, title = '🏠 *Propiedades encontradas:*', totalAvailable = null, hasMore = false) {
+export function formatPropertyList(properties, title = '🏠 *Propiedades encontradas:*', totalAvailable = null, hasMore = false, viewedIndices = []) {
   if (!properties || properties.length === 0) {
     return '❌ No se encontraron propiedades que coincidan con tu búsqueda.';
   }
@@ -15,13 +59,22 @@ export function formatPropertyList(properties, title = '🏠 *Propiedades encont
     message += ` (mostrando ${properties.length} de ${totalAvailable})`;
   }
   
+  // Mostrar información de propiedades vistas si hay alguna
+  if (viewedIndices && viewedIndices.length > 0) {
+    message += ` (✅ vistas: ${viewedIndices.length})`;
+  }
+  
   message += '\n\n';
   
   properties.forEach((property, index) => {
     const number = index + 1;
     const emoji = getPropertyEmoji(property.propertyType);
+    const isViewed = viewedIndices && viewedIndices.includes(index);
     
-    message += `${number}️⃣ *${emoji} ${formatPropertyTitle(property)}*\n`;
+    // Agregar checkmark si la propiedad fue vista
+    const viewedMark = isViewed ? '✅ ' : '';
+    
+    message += `${viewedMark}${number}️⃣ *${emoji} ${formatPropertyTitle(property)}*\n`;
     message += `📍 ${formatLocation(property)}\n`;
     message += `💰 ${formatPrice(property)}\n`;
     message += `🏠 ${formatFeatures(property)}\n`;
@@ -80,10 +133,20 @@ export function formatPropertyDetails(property) {
   // Descripción normalizada o normal
   if (property.descriptionNormalized || property.description) {
     message += `\n📝 *Descripción:*\n`;
-    const desc = property.descriptionNormalized || property.description;
-    // Limitar descripción a 500 caracteres para WhatsApp
-    const shortDesc = desc.length > 500 ? desc.substring(0, 497) + '...' : desc;
-    message += `${shortDesc}\n`;
+    const rawDesc = property.descriptionNormalized || property.description;
+    
+    // Limpiar HTML y formatear
+    const cleanDesc = sanitizeHtml(rawDesc);
+    
+    // Truncar de forma inteligente (máximo 1200 caracteres)
+    const formattedDesc = smartTruncate(cleanDesc, 1200);
+    
+    message += `${formattedDesc}\n`;
+    
+    // Si se truncó, mostrar opción para ver completa
+    if (formattedDesc.endsWith('...')) {
+      message += `\n💬 _Escribe "descripción completa" para ver toda la descripción_\n`;
+    }
   }
   
   // Características especiales
@@ -334,17 +397,102 @@ function getPropertyAmenities(property) {
   return amenities;
 }
 
-// Formatear mensaje de error
-export function formatErrorMessage(error, userMessage) {
+// Sistema de mensajes de error contextual y humano
+export function formatErrorMessage(errorType, context = {}) {
+  const { userMessage, attemptCount = 1, lastAction, hasAlternatives = true } = context;
+  
   const errorMessages = {
-    'no_results': `🔍 No encontré propiedades para: "${userMessage}"\n\n💡 Sugerencias:\n• Amplía el rango de precios\n• Prueba con menos filtros\n• Verifica la zona solicitada`,
-    'search_error': '❌ Error en la búsqueda. Por favor, intenta de nuevo.',
-    'invalid_input': '❌ No entiendo tu consulta. Intenta con algo como:\n• "Depto 2 dormitorios Centro"\n• "Casa con jardín zona norte"\n• "Algo hasta 400 mil"',
-    'timeout': '⏱️ La búsqueda tardó demasiado. Intenta de nuevo.',
-    'service_error': '❌ Servicio temporalmente no disponible. Intenta en unos minutos.'
+    // Búsquedas sin resultados - tono optimista y sugerente
+    'no_results': [
+      `🤔 Hmm, no encontré propiedades para "${userMessage}".\n\n💡 ¿Qué te parece si probamos con:\n• Un rango de precios más amplio\n• Menos filtros específicos\n• Una zona cercana`,
+      `🔍 Esta vez no hubo suerte con "${userMessage}".\n\n¿Te ayudo a ajustar la búsqueda? Puedo:\n• Mostrarte zonas similares\n• Sugerir precios en esa área\n• Ver tus búsquedas anteriores`,
+      `No te preocupes, a veces hay que afinar la búsqueda 😊\n\n¿Probamos con criterios un poco diferentes? O si quieres, puedo mostrarte tus favoritos mientras tanto.`
+    ],
+    
+    // Errores técnicos de búsqueda - tono empático
+    'search_error': [
+      `🤔 Algo no funcionó bien con la búsqueda. ¿Podrías intentar de nuevo?\n\nMientras tanto, ¿te gustaría ver tus propiedades guardadas?`,
+      `Ups, parece que hubo un pequeño problema técnico. ¿Intentamos otra vez?\n\nO puedo ayudarte de otra forma: ¿quieres ver tu historial de búsquedas?`,
+      `Disculpa, el sistema tuvo un hiccup 😅 ¿Lo intentamos de nuevo?\n\nSi el problema persiste, escribe "ayuda" para ver otras opciones.`
+    ],
+    
+    // Input inválido - tono educativo y amigable  
+    'invalid_input': [
+      `🤷‍♂️ No estoy seguro de entender lo que buscas.\n\n¿Podrías intentar con algo como:\n• "Depto 2 dormitorios Centro"\n• "Casa con jardín zona norte"\n• "Algo hasta 400 mil"`,
+      `No logro entender tu búsqueda. ¿Me ayudas reformulándola?\n\n💡 Algunos ejemplos que funcionan bien:\n• "3 dormitorios Pichincha"\n• "Casa barata zona sur"\n• "Departamento hasta 300 mil"`,
+      `¿Podrías ser un poco más específico? Me ayuda si mencionas:\n• Tipo de propiedad (casa, depto)\n• Cantidad de dormitorios\n• Zona o precio aproximado`
+    ],
+    
+    // Timeouts - tono tranquilizador
+    'timeout': [
+      `⏱️ La búsqueda está tomando más tiempo del usual. ¿Intentamos de nuevo?\n\nA veces pasa cuando hay mucha demanda.`,
+      `Parece que la conexión está un poco lenta hoy. ¿Probamos otra vez?\n\n¿O prefieres que te muestre algo de tu historial mientras esperamos?`,
+      `La búsqueda se está tomando su tiempo... ¿Reintentamos?\n\nTambién puedo mostrarte propiedades similares a las que viste antes.`
+    ],
+    
+    // Errores de servicio - tono profesional pero humano
+    'service_error': [
+      `😔 Disculpa, algo no está funcionando bien de mi lado.\n\n¿Podrías intentar en unos minutos? Mientras tanto, ¿hay algo más en lo que pueda ayudarte?`,
+      `Parece que tenemos un problemita técnico. ¿Intentamos en un ratito?\n\n¿Te gustaría ver tus propiedades favoritas mientras se resuelve?`,
+      `Ups, el sistema está teniendo dificultades. Inténtalo en unos minutos, por favor.\n\nSi es urgente, escribe "ayuda" para ver otras opciones.`
+    ],
+    
+    // Errores de acceso a datos - tono disculpándose
+    'data_access_error': [
+      `😅 Perdón, no pude acceder a tus datos en este momento.\n\n¿Podrías intentar de nuevo? Si el problema persiste, hazme saber.`,
+      `Tuve un problemita accediendo a tu información. ¿Reintentamos?\n\nMientras tanto, puedo ayudarte con búsquedas nuevas.`,
+      `Disculpa, no pude conectar con tus datos guardados. ¿Lo intentamos otra vez?\n\n¿O prefieres hacer una búsqueda nueva?`
+    ],
+    
+    // Números/comandos inválidos - tono guía amigable
+    'invalid_number': [
+      `🤔 Ese número no está en la lista. ¿Podrías elegir uno entre 1 y {max}?\n\n💡 Tip: Primero busca propiedades, luego elige el número que te interese.`,
+      `No encuentro esa propiedad. Asegúrate de elegir un número de la lista anterior.\n\n¿O prefieres hacer una nueva búsqueda?`,
+      `Hmm, ese número no coincide con ninguna propiedad. ¿Revisas la lista?\n\nTambién puedes escribir lo que buscas para empezar de nuevo.`
+    ],
+    
+    // Sin fotos - tono lamentándose pero ofreciendo alternativas
+    'no_photos': [
+      `😕 Esta propiedad no tiene fotos disponibles por el momento.\n\n¿Te muestro los detalles completos o prefieres ver otra propiedad?`,
+      `Lamentablemente no hay fotos de esta propiedad.\n\n¿Quieres que te describa más detalles o buscamos opciones similares?`,
+      `No tengo fotos de esta para mostrarte, perdón.\n\n¿Te ayudo con información detallada o buscamos otras opciones?`
+    ],
+
+    // Sin búsqueda previa - tono orientativo
+    'no_previous_search': [
+      `🤷‍♂️ No tengo una búsqueda anterior para mostrar más resultados.\n\n¿Qué te gustaría buscar? Puedo ayudarte a encontrar propiedades.`,
+      `Aún no has hecho ninguna búsqueda. ¿Por dónde empezamos?\n\n💡 Escribe algo como "departamento centro" para comenzar.`,
+      `No hay búsquedas previas. ¿Qué tipo de propiedad te interesa?\n\nPuedo ayudarte a encontrar casas, departamentos, lo que necesites.`
+    ]
   };
   
-  return errorMessages[error] || errorMessages['service_error'];
+  const messages = errorMessages[errorType] || errorMessages['service_error'];
+  const messageIndex = Math.min(attemptCount - 1, messages.length - 1);
+  let message = messages[messageIndex];
+  
+  // Reemplazar placeholders dinámicos
+  if (context.max) {
+    message = message.replace('{max}', context.max);
+  }
+  
+  return message;
+}
+
+// Función auxiliar para generar mensajes de error con contexto
+export function createErrorContext(userMessage, session, errorType, additionalContext = {}) {
+  const context = {
+    userMessage,
+    attemptCount: (session.errorCounts?.[errorType] || 0) + 1,
+    lastAction: session.lastAction,
+    hasAlternatives: session.lastResults?.length > 0 || session.context?.favorites?.length > 0,
+    ...additionalContext
+  };
+  
+  // Incrementar contador de errores para degradación gradual
+  if (!session.errorCounts) session.errorCounts = {};
+  session.errorCounts[errorType] = context.attemptCount;
+  
+  return context;
 }
 
 // Formatear resumen de búsqueda
