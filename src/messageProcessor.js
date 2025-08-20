@@ -375,10 +375,28 @@ async function handlePropertyDetail(message, session) {
     };
   }
   
-  const properties = currentSearch.properties;
+  // Determinar qué propiedades usar para la selección del usuario
+  // Si hay lastResults, significa que el usuario vio un listado reciente (ej: "más")
+  // y su selección se refiere a ese listado, no al tracking global
+  let properties, globalIndex;
   
-  console.log(`🔍 Solicitando detalles de propiedad #${message}, índice: ${propertyIndex}`);
-  console.log(`📋 Propiedades disponibles en búsqueda actual: ${properties.length}`);
+  if (session.context.lastResults && session.context.lastResults.length > 0) {
+    // Usar el último listado mostrado al usuario
+    properties = session.context.lastResults;
+    // Calcular el índice global en el tracking completo
+    const offset = session.context.currentOffset || 0;
+    globalIndex = offset + propertyIndex;
+    console.log(`📱 Usuario selecciona de último listado mostrado (offset: ${offset})`);
+  } else {
+    // Usar todas las propiedades del tracking (búsqueda inicial)
+    properties = currentSearch.properties;
+    globalIndex = propertyIndex;
+    console.log(`📱 Usuario selecciona de búsqueda inicial completa`);
+  }
+  
+  console.log(`🔍 Solicitando detalles de propiedad #${message}, índice local: ${propertyIndex}, índice global: ${globalIndex}`);
+  console.log(`📋 Propiedades disponibles en listado actual: ${properties.length}`);
+  console.log(`📊 Total propiedades en tracking: ${currentSearch.properties.length}`);
   console.log(`🔍 Search ID: ${session.context.currentSearchId}`);
   
   if (propertyIndex < 0 || propertyIndex >= properties.length) {
@@ -392,9 +410,9 @@ async function handlePropertyDetail(message, session) {
   
   const property = properties[propertyIndex];
   
-  // Marcar esta propiedad como vista en el tracking actual
-  markPropertyAsViewed(session, propertyIndex);
-  console.log(`✅ Propiedad #${message} marcada como vista`);
+  // Marcar esta propiedad como vista en el tracking global usando el índice global
+  markPropertyAsViewed(session, globalIndex);
+  console.log(`✅ Propiedad #${message} marcada como vista (índice global: ${globalIndex})`);
   
   console.log(`✅ Mostrando detalles de: ${property.title || property.propertyType}`);
   console.log(`📸 Propiedad tiene ${property.photos?.length || 0} fotos`);
@@ -408,12 +426,12 @@ async function handlePropertyDetail(message, session) {
     sendImage: shouldSendImage, // Flag para enviar imagen
     property: property, // Para enviar imagen después
     resendList: true, // Flag para reenviar listado actualizado
-    listProperties: properties, // Propiedades del listado actual
-    viewedIndices: currentSearch.viewedIndices, // Índices de propiedades vistas
+    listProperties: properties, // Propiedades del listado que vio el usuario
+    viewedIndices: currentSearch.viewedIndices, // Índices de propiedades vistas (global)
     context: {
       ...session.context,
       lastSelectedProperty: property,
-      lastViewedPropertyIndex: propertyIndex
+      lastViewedPropertyIndex: globalIndex // Usar índice global para tracking
     }
   };
 }
