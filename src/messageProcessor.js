@@ -288,7 +288,7 @@ function detectMessageType(message, session) {
 // Manejar saludo
 function handleGreeting() {
   return {
-    text: `¡Hola! 👋 Soy Airi.
+    text: `¡Hola! 👋 Soy Argy.
 
 🏠 **¿Qué tipo de propiedad estas buscando?**
 

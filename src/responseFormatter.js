@@ -173,7 +173,8 @@ export function formatPropertyDetails(property) {
   // URL de la propiedad
   if (property.url) {
     const shortUrl = shortenUrl(property.url);
-    message += `\n🔗 *Ver:* ${shortUrl}\n`;
+    // Mostrar URL enmascarada seguida del enlace real clickeable
+    message += `\n🔗 *Ver:* ${shortUrl}\n📱 *Link:* ${property.url}\n`;
   }
   
   // Fotos
